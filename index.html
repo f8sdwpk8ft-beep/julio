@@ -175,6 +175,55 @@
   .reveal.reveal-pending{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.2,.7,.2,1), transform .8s cubic-bezier(.2,.7,.2,1);}
   .reveal.reveal-pending.is-visible{opacity:1;transform:translateY(0);}
 
+  /* ---------- CATÁLOGO RÁPIDO ---------- */
+  .catalogo{background:var(--paper);}
+  .cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.1rem;}
+  .cat-card{
+    position:relative;background:#fff;border:1px solid var(--line);border-radius:20px;
+    padding:1.9rem 1.7rem;display:flex;flex-direction:column;gap:0.9rem;
+    text-decoration:none;color:inherit;
+    transition:border-color .25s ease, transform .25s ease, box-shadow .25s ease;
+  }
+  .cat-card:hover, .cat-card:focus-visible{border-color:var(--coral);transform:translateY(-4px);box-shadow:var(--shadow-card);}
+  .cat-icon{
+    width:50px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:14px;
+    background:var(--paper-2);border:1px solid var(--line);
+    transition:transform .35s cubic-bezier(.34,1.56,.64,1), background .25s ease;
+  }
+  .cat-card:hover .cat-icon{background:var(--coral-tint);transform:scale(1.06) rotate(-3deg);}
+  .cat-icon svg{width:24px;height:24px;color:var(--ink);}
+  .cat-card:hover .cat-icon svg{color:var(--coral-deep);}
+  .cat-title{font-family:'Sora',sans-serif;font-weight:700;font-size:1.12rem;letter-spacing:-0.01em;margin:0;}
+  .cat-copy{color:var(--ink-dim);font-size:0.9rem;line-height:1.5;margin:0;flex:1;}
+  .cat-cta{
+    display:inline-flex;align-items:center;gap:0.4rem;font-size:0.82rem;font-weight:700;color:var(--whatsapp-deep);
+    margin-top:auto;padding-top:0.6rem;border-top:1px solid var(--line);
+  }
+  .cat-cta svg{width:14px;height:14px;flex:none;}
+  .cat-cta .arrow{width:15px;height:15px;margin-left:auto;color:var(--ink-faint);transition:transform .25s ease, color .2s ease;}
+  .cat-card:hover .cat-cta .arrow{transform:translateX(3px);color:var(--coral);}
+
+  .cat-more{max-width:900px;margin:1.8rem auto 0;text-align:center;}
+  .cat-more-summary{
+    display:inline-flex;align-items:center;gap:0.6rem;padding:0.85rem 1.6rem;
+    border:1px solid var(--line-strong);border-radius:999px;cursor:pointer;list-style:none;
+    font-weight:700;font-size:0.9rem;color:var(--ink);
+    transition:border-color .2s ease, background .2s ease;
+  }
+  .cat-more-summary::-webkit-details-marker{display:none;}
+  .cat-more-summary:hover{border-color:var(--coral);background:var(--coral-tint);}
+  .cat-more[open] .cat-more-summary{border-color:var(--coral);background:var(--coral-tint);}
+  .cat-more-icon{width:16px;height:16px;color:var(--ink-faint);transition:transform .4s cubic-bezier(.34,1.56,.64,1), color .2s ease;}
+  .cat-more[open] .cat-more-icon{transform:rotate(45deg);color:var(--coral);}
+  .cat-more-grid{margin-top:1.4rem;display:flex;flex-wrap:wrap;justify-content:center;gap:0.7rem;}
+  .cat-chip{
+    display:inline-flex;align-items:center;gap:0.5rem;padding:0.65rem 1.15rem;border-radius:999px;
+    background:#fff;border:1px solid var(--line);font-size:0.86rem;font-weight:600;color:var(--ink-dim);
+    text-decoration:none;transition:border-color .2s ease, color .2s ease, transform .2s ease;
+  }
+  .cat-chip:hover{border-color:var(--coral);color:var(--coral-deep);transform:translateY(-2px);}
+  .cat-chip svg{width:13px;height:13px;color:var(--coral);flex:none;}
+
   /* ---------- DIFERENCIAIS ---------- */
   .diferenciais{background:var(--paper);border-top:1px solid var(--line);}
   .diff-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:20px;overflow:hidden;}
@@ -343,6 +392,7 @@
   }
 
   @media (max-width:1180px){
+    .cat-grid{grid-template-columns:repeat(2,1fr);}
     .diff-grid{grid-template-columns:repeat(2,1fr);}
     .prod-grid{grid-template-columns:repeat(2,1fr);}
     .testi-grid{grid-template-columns:1fr;}
@@ -353,6 +403,7 @@
     .nav-toggle{display:inline-flex;}
     .hero{min-height:min(96svh,760px);align-items:flex-end;}
     .hero-copy{max-width:none;}
+    .cat-grid{grid-template-columns:1fr;}
     .hero-scrim{
       background:
         linear-gradient(0deg, var(--paper) 0%, rgba(251,249,244,0.94) 40%, rgba(251,249,244,0.55) 68%, rgba(251,249,244,0.15) 100%);
@@ -372,8 +423,8 @@
     <span class="brand-text">Floripa<span>Eletrônicos · Entrega Expressa</span></span>
   </a>
   <ul class="nav-links">
+    <li><a href="#catalogo">Catálogo</a></li>
     <li><a href="#produtos">Produtos</a></li>
-    <li><a href="#diferenciais">Diferenciais</a></li>
     <li><a href="#entrega">Entrega</a></li>
     <li><a href="#depoimentos">Depoimentos</a></li>
     <li><a href="#duvidas">Dúvidas</a></li>
@@ -413,6 +464,86 @@
         <div class="hero-stat"><b class="mono">Hoje</b><span>Entrega em Floripa</span></div>
       </div>
     </div>
+  </div>
+</section>
+
+<section class="catalogo" id="catalogo">
+  <div class="shell">
+    <div class="section-head reveal">
+      <div>
+        <p class="eyebrow">Catálogo rápido</p>
+        <h2 class="section-title display">Direto pro WhatsApp</h2>
+      </div>
+      <p class="section-note">Toque na categoria e a conversa já abre com a gente — sem formulário, sem enrolação.</p>
+    </div>
+
+    <div class="cat-grid reveal">
+      <a class="cat-card" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Smartphones." target="_blank" rel="noopener">
+        <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2" stroke-linecap="round"/></svg></div>
+        <h3 class="cat-title">Smartphones</h3>
+        <p class="cat-copy">Novos e seminovos revisados, de várias marcas e faixas de preço.</p>
+        <span class="cat-cta"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2Zm5.6 14.3c-.2.6-1.3 1.2-1.9 1.3-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6-2.9-1.3-4.8-4.2-4.9-4.4-.1-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5.2.5.7 1.8.8 1.9.1.1.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.1-.3.3-.1.6.2.3.9 1.4 1.9 2.3 1.3 1.1 2.4 1.5 2.7 1.6.3.1.5.1.7-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.7-.1.3.1 1.9.9 2.2 1 .3.2.5.2.6.4.1.2.1.9-.1 1.5Z"/></svg>Pedir no WhatsApp
+          <svg class="arrow" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </a>
+      <a class="cat-card" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Notebooks." target="_blank" rel="noopener">
+        <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4" stroke-linecap="round"/></svg></div>
+        <h3 class="cat-title">Notebooks</h3>
+        <p class="cat-copy">Pra trabalho, estudo ou jogar — com garantia e suporte pós-venda.</p>
+        <span class="cat-cta"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2Zm5.6 14.3c-.2.6-1.3 1.2-1.9 1.3-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6-2.9-1.3-4.8-4.2-4.9-4.4-.1-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5.2.5.7 1.8.8 1.9.1.1.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.1-.3.3-.1.6.2.3.9 1.4 1.9 2.3 1.3 1.1 2.4 1.5 2.7 1.6.3.1.5.1.7-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.7-.1.3.1 1.9.9 2.2 1 .3.2.5.2.6.4.1.2.1.9-.1 1.5Z"/></svg>Pedir no WhatsApp
+          <svg class="arrow" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </a>
+      <a class="cat-card" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Fones%20%26%20%C3%81udio." target="_blank" rel="noopener">
+        <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 14v-3a8 8 0 0 1 16 0v3" stroke-linecap="round"/><rect x="2" y="14" width="5" height="7" rx="1.5"/><rect x="17" y="14" width="5" height="7" rx="1.5"/></svg></div>
+        <h3 class="cat-title">Fones &amp; áudio</h3>
+        <p class="cat-copy">Fones com e sem fio, de vários estilos e faixas de preço.</p>
+        <span class="cat-cta"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2Zm5.6 14.3c-.2.6-1.3 1.2-1.9 1.3-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6-2.9-1.3-4.8-4.2-4.9-4.4-.1-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5.2.5.7 1.8.8 1.9.1.1.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.1-.3.3-.1.6.2.3.9 1.4 1.9 2.3 1.3 1.1 2.4 1.5 2.7 1.6.3.1.5.1.7-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.7-.1.3.1 1.9.9 2.2 1 .3.2.5.2.6.4.1.2.1.9-.1 1.5Z"/></svg>Pedir no WhatsApp
+          <svg class="arrow" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </a>
+      <a class="cat-card" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Caixas%20de%20Som." target="_blank" rel="noopener">
+        <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/></svg></div>
+        <h3 class="cat-title">Caixas de som</h3>
+        <p class="cat-copy">Portáteis, à prova d'água, ideais pra praia e pra casa.</p>
+        <span class="cat-cta"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2Zm5.6 14.3c-.2.6-1.3 1.2-1.9 1.3-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6-2.9-1.3-4.8-4.2-4.9-4.4-.1-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5.2.5.7 1.8.8 1.9.1.1.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.1-.3.3-.1.6.2.3.9 1.4 1.9 2.3 1.3 1.1 2.4 1.5 2.7 1.6.3.1.5.1.7-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.7-.1.3.1 1.9.9 2.2 1 .3.2.5.2.6.4.1.2.1.9-.1 1.5Z"/></svg>Pedir no WhatsApp
+          <svg class="arrow" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </a>
+      <a class="cat-card" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Carregadores%20%26%20Cabos." target="_blank" rel="noopener">
+        <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 3v4M3 5h4M19 12v4M17 14h4" stroke-linecap="round"/><rect x="8" y="8" width="8" height="13" rx="1.5"/></svg></div>
+        <h3 class="cat-title">Carregadores &amp; cabos</h3>
+        <p class="cat-copy">Originais e compatíveis, com carregamento rápido de verdade.</p>
+        <span class="cat-cta"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2Zm5.6 14.3c-.2.6-1.3 1.2-1.9 1.3-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6-2.9-1.3-4.8-4.2-4.9-4.4-.1-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5.2.5.7 1.8.8 1.9.1.1.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.1-.3.3-.1.6.2.3.9 1.4 1.9 2.3 1.3 1.1 2.4 1.5 2.7 1.6.3.1.5.1.7-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.7-.1.3.1 1.9.9 2.2 1 .3.2.5.2.6.4.1.2.1.9-.1 1.5Z"/></svg>Pedir no WhatsApp
+          <svg class="arrow" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </a>
+      <a class="cat-card" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Capas%20%26%20Pel%C3%ADculas." target="_blank" rel="noopener">
+        <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M10 6h4" stroke-linecap="round"/></svg></div>
+        <h3 class="cat-title">Capas &amp; películas</h3>
+        <p class="cat-copy">Proteção pro seu aparelho com estilo, pra todos os modelos.</p>
+        <span class="cat-cta"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2Zm5.6 14.3c-.2.6-1.3 1.2-1.9 1.3-.5.1-1.1.1-1.8-.1-.4-.1-1-.3-1.7-.6-2.9-1.3-4.8-4.2-4.9-4.4-.1-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5.2.5.7 1.8.8 1.9.1.1.1.3 0 .5-.1.2-.1.3-.3.5l-.4.5c-.1.1-.3.3-.1.6.2.3.9 1.4 1.9 2.3 1.3 1.1 2.4 1.5 2.7 1.6.3.1.5.1.7-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.7-.1.3.1 1.9.9 2.2 1 .3.2.5.2.6.4.1.2.1.9-.1 1.5Z"/></svg>Pedir no WhatsApp
+          <svg class="arrow" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </a>
+    </div>
+
+    <details class="cat-more reveal">
+      <summary class="cat-more-summary">
+        <span>Mais produtos</span>
+        <svg class="cat-more-icon" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </summary>
+      <div class="cat-more-grid">
+        <a class="cat-chip" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Assist%C3%AAncia%20t%C3%A9cnica." target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2 2.5-2.5Z"/></svg>Assistência técnica</a>
+        <a class="cat-chip" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Smartwatches." target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M9 4h6M9 20h6"/></svg>Smartwatches</a>
+        <a class="cat-chip" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Tablets." target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M11 18h2"/></svg>Tablets</a>
+        <a class="cat-chip" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Power%20banks." target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>Power banks</a>
+        <a class="cat-chip" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Suportes%20%26%20trip%C3%A9s." target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10M7 20l5-6 5 6M5 9l7-5 7 5"/></svg>Suportes &amp; tripés</a>
+        <a class="cat-chip" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Cabos%20%26%20adaptadores." target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v6a3 3 0 0 0 6 0V3M12 15v6M8 21h8"/></svg>Cabos &amp; adaptadores</a>
+        <a class="cat-chip" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20Consoles%20%26%20acess%C3%B3rios%20gamer." target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="8" width="20" height="10" rx="5"/><path d="M7 11v4M5 13h4"/><circle cx="16" cy="12" r="1"/><circle cx="18.5" cy="14.5" r="1"/></svg>Consoles &amp; gamer</a>
+        <a class="cat-chip" href="https://wa.me/5548900000000?text=Ol%C3%A1%21%20Tenho%20interesse%20em%20C%C3%A2meras%20%26%20seguran%C3%A7a." target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.2"/></svg>Câmeras &amp; segurança</a>
+      </div>
+    </details>
   </div>
 </section>
 
@@ -696,6 +827,7 @@
     <span>© 2026 Floripa Eletrônicos</span>
   </div>
   <nav>
+    <a href="#catalogo">Catálogo</a>
     <a href="#produtos">Produtos</a>
     <a href="#entrega">Entrega</a>
     <a href="#depoimentos">Depoimentos</a>
