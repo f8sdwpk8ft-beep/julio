@@ -893,6 +893,7 @@
 
   try{
     if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+      var loadedBgVideos = [];
       var loadBgVideo = function(videoId, dataId){
         var v = document.getElementById(videoId);
         var holder = document.getElementById(dataId);
@@ -902,9 +903,11 @@
           var bytes = Uint8Array.from(atob(b64), function(c){ return c.charCodeAt(0); });
           var url = URL.createObjectURL(new Blob([bytes], {type:'video/mp4'}));
           v.muted = true;
+          v.defaultMuted = true;
           v.playsInline = true;
           v.src = url;
           v.load();
+          loadedBgVideos.push(v);
           var tryPlay = function(){ var p = v.play(); if (p && p.catch) p.catch(function(){}); };
           tryPlay();
           v.addEventListener('loadedmetadata', tryPlay);
@@ -913,6 +916,20 @@
       };
       loadBgVideo('hero-video', 'hero-video-b64');
       loadBgVideo('delivery-video', 'delivery-video-b64');
+
+      // Safari inside a cross-origin iframe (as this page runs when embedded)
+      // often withholds autoplay until a real user gesture happens, even for
+      // muted video. Kick playback off the first tap/click/scroll as a
+      // reliable fallback so the videos still start instead of staying frozen
+      // on the poster frame.
+      var unlockBgVideos = function(){
+        loadedBgVideos.forEach(function(v){
+          if (v.paused){ var p = v.play(); if (p && p.catch) p.catch(function(){}); }
+        });
+      };
+      ['touchstart','pointerdown','click','scroll','keydown'].forEach(function(evt){
+        addEventListener(evt, unlockBgVideos, {passive:true, capture:true});
+      });
     }
   }catch(e){}
 </script>
