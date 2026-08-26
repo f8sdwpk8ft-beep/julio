@@ -128,6 +128,43 @@ button, input, select{font-family:inherit;}
 .kpi-sub.warn{color:var(--warn);}
 .kpi-sub.danger{color:var(--danger);}
 
+/* KPIs de destaque (Financeiro): fundo sólido, valor em branco */
+.kpi-card-solid{
+  position:relative;overflow:hidden;border:none;
+  color:#fff;
+}
+.kpi-card-solid::after{
+  content:"";position:absolute;top:-45%;right:-20%;
+  width:230px;height:230px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,0.16) 0%,rgba(255,255,255,0) 70%);
+  pointer-events:none;
+}
+.kpi-card-solid > *{position:relative;z-index:1;}
+.kpi-solid-ok{
+  background:linear-gradient(140deg,#22b07d 0%,#1a9e6b 45%,#127a51 100%);
+  box-shadow:0 10px 28px -12px rgba(26,158,107,0.65);
+}
+.kpi-solid-danger{
+  background:linear-gradient(140deg,#ee5f56 0%,#e0453c 45%,#b8302a 100%);
+  box-shadow:0 10px 28px -12px rgba(224,69,60,0.65);
+}
+.kpi-card-solid .kpi-label{color:rgba(255,255,255,0.82);letter-spacing:0.08em;}
+.kpi-card-solid .kpi-value,
+.kpi-card-solid .kpi-value-green,
+.kpi-card-solid .kpi-value-red{color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.14);}
+.kpi-card-solid .kpi-sub,
+.kpi-card-solid .kpi-sub.ok,
+.kpi-card-solid .kpi-sub.warn,
+.kpi-card-solid .kpi-sub.danger{color:rgba(255,255,255,0.85);font-weight:600;}
+.kpi-card-solid .kpi-eye{color:rgba(255,255,255,0.85);}
+.kpi-card-solid .kpi-eye:hover{color:#fff;background:rgba(255,255,255,0.18);}
+.kpi-card-solid.kpi-card-clickable:hover{
+  transform:translateY(-2px);
+}
+.kpi-solid-ok.kpi-card-clickable:hover{box-shadow:0 18px 38px -14px rgba(26,158,107,0.75);}
+.kpi-solid-danger.kpi-card-clickable:hover{box-shadow:0 18px 38px -14px rgba(224,69,60,0.75);}
+.kpi-card-solid.kpi-card-clickable:active{transform:translateY(0);}
+
 .panel{
   background:var(--surface);border-radius:12px;box-shadow:var(--shadow);
   padding:1.8rem 1.5rem;margin-bottom:1.8rem;
