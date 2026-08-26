@@ -421,3 +421,23 @@ tbody tr:hover{background:var(--surface-2, rgba(0,0,0,0.02));}
   .main{margin-left:0;}
   .menu-toggle{display:inline-flex;}
 }
+
+/* ---------- Recibo de venda (impressão) ---------- */
+.recibo-print{display:none;}
+.recibo-loja{font-size:1.1rem;font-weight:800;text-align:center;}
+.recibo-sub{font-size:0.8rem;text-align:center;color:#444;margin-bottom:0.4rem;}
+.recibo-divisor{border-top:1px dashed #999;margin:0.5rem 0;}
+.recibo-linha{display:flex;justify-content:space-between;font-size:0.85rem;padding:0.15rem 0;}
+.recibo-item{display:flex;justify-content:space-between;font-size:0.85rem;padding:0.15rem 0;}
+.recibo-total{font-weight:800;font-size:0.95rem;}
+.recibo-pagamentos-titulo{font-weight:700;font-size:0.82rem;margin-bottom:0.2rem;}
+.recibo-rodape{text-align:center;font-size:0.8rem;margin-top:0.8rem;color:#444;}
+
+@media print{
+  body *{visibility:hidden;}
+  .recibo-print, .recibo-print *{visibility:visible;}
+  .recibo-print{
+    display:block;position:absolute;top:0;left:0;
+    width:80mm;padding:2mm;font-family:'Courier New',monospace;color:#000;
+  }
+}

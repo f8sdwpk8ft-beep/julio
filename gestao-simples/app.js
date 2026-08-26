@@ -3,7 +3,7 @@
 
   var STORAGE_KEY = "gestao-simples-data-v1";
 
-  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], vendedores: [], comissaoPercentual: 5 };
+  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], vendedores: [], comissaoPercentual: 5, nomeLoja: "" };
 
   function loadData(){
     try{
@@ -81,10 +81,11 @@
   function closeModal(){ modalRoot.innerHTML = ""; }
 
   // ---------- Navigation ----------
-  var views = ["dashboard","vendas","produtos","clientes","financeiro"];
-  var titles = { dashboard:"Dashboard", vendas:"Vendas", produtos:"Produtos", clientes:"Clientes", financeiro:"Financeiro" };
+  var views = ["dashboard","vendas","produtos","clientes","financeiro","admin"];
+  var titles = { dashboard:"Dashboard", vendas:"Vendas", produtos:"Produtos", clientes:"Clientes", financeiro:"Financeiro", admin:"Admin" };
+  var adminDesbloqueado = false;
 
-  function showView(name){
+  function mostrarView(name){
     views.forEach(function(v){
       document.getElementById("view-" + v).classList.toggle("hidden", v !== name);
     });
@@ -94,6 +95,17 @@
     document.getElementById("pageTitle").textContent = titles[name];
     document.getElementById("sidebar").classList.remove("open");
     renderAll();
+  }
+
+  function showView(name){
+    if(name === "admin" && !adminDesbloqueado){
+      pedirSenhaAdmin(function(){
+        adminDesbloqueado = true;
+        mostrarView("admin");
+      });
+      return;
+    }
+    mostrarView(name);
   }
 
   document.getElementById("nav").addEventListener("click", function(e){
@@ -300,7 +312,11 @@
         '<td>' + esc(itensResumo) + '</td>' +
         '<td>' + esc(pagamentoResumoLabel(v)) + '</td>' +
         '<td class="cell-strong">' + brl(v.total) + '</td>' +
-        '<td class="cell-actions"><button class="btn btn-ghost btn-sm" data-edit-venda="' + v.id + '">Editar</button><button class="btn btn-danger btn-sm" data-del-venda="' + v.id + '">Excluir</button></td>' +
+        '<td class="cell-actions">' +
+          '<button class="btn btn-ghost btn-sm btn-icon" data-print-venda="' + v.id + '" title="Imprimir recibo">' + PRINT_SVG + '</button>' +
+          '<button class="btn btn-ghost btn-sm" data-edit-venda="' + v.id + '">Editar</button>' +
+          '<button class="btn btn-danger btn-sm" data-del-venda="' + v.id + '">Excluir</button>' +
+        '</td>' +
       '</tr>';
     }).join("");
   }
@@ -319,13 +335,25 @@
     return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
   }
 
-  function filtrarVendasPorPeriodo(filtro, dataCustom){
+  function filtrarVendasPorPeriodo(filtro, dataCustom, rangeInicio, rangeFim){
     var hoje = todayISO();
     if(filtro === "data") return state.vendas.filter(function(v){ return v.data === (dataCustom || hoje); });
     if(filtro === "ontem") return state.vendas.filter(function(v){ return v.data === diaAnterior(hoje); });
     if(filtro === "mes") return state.vendas.filter(function(v){ return v.data.slice(0,7) === hoje.slice(0,7); });
     if(filtro === "ano") return state.vendas.filter(function(v){ return v.data.slice(0,4) === hoje.slice(0,4); });
+    if(filtro === "custom") return state.vendas.filter(function(v){ return v.data >= rangeInicio && v.data <= rangeFim; });
+    if(filtro === "tudo") return state.vendas.slice();
     return state.vendas.filter(function(v){ return v.data === hoje; });
+  }
+
+  function filtrarDespesasPorPeriodo(filtro, rangeInicio, rangeFim){
+    var todasPagar = state.contas.filter(function(c){ return c.tipo === "pagar"; });
+    var hoje = todayISO();
+    if(filtro === "hoje" || filtro === "data") return todasPagar.filter(function(c){ return c.vencimento === hoje; });
+    if(filtro === "mes") return todasPagar.filter(function(c){ return c.vencimento.slice(0,7) === hoje.slice(0,7); });
+    if(filtro === "ano") return todasPagar.filter(function(c){ return c.vencimento.slice(0,4) === hoje.slice(0,4); });
+    if(filtro === "custom") return todasPagar.filter(function(c){ return c.vencimento >= rangeInicio && c.vencimento <= rangeFim; });
+    return todasPagar;
   }
 
   function vendasDetalheHtml(filtro, dataCustom){
@@ -468,11 +496,55 @@
       '<div class="venda-detalhe-itens">' + itensHtml + '</div>' +
       descontoLinha +
       '<div class="venda-total"><span>Total</span><span>' + brl(v.total) + '</span></div>' +
-      '<div class="modal-actions"><button class="btn btn-ghost" id="btnVoltarLista">Voltar</button><button class="btn btn-primary" id="btnFecharDetalhe">Fechar</button></div>'
+      '<div class="modal-actions">' +
+        '<button class="btn btn-ghost" id="btnImprimirRecibo">' + PRINT_SVG + ' Imprimir recibo</button>' +
+        '<button class="btn btn-ghost" id="btnVoltarLista">Voltar</button>' +
+        '<button class="btn btn-primary" id="btnFecharDetalhe">Fechar</button>' +
+      '</div>'
     ), function(body){
       body.querySelector("#btnFecharDetalhe").addEventListener("click", closeModal);
       body.querySelector("#btnVoltarLista").addEventListener("click", abrirDetalhesVendas);
+      body.querySelector("#btnImprimirRecibo").addEventListener("click", function(){ imprimirRecibo(v.id); });
     });
+  }
+
+  function imprimirRecibo(vendaId){
+    var v = state.vendas.find(function(x){ return x.id === vendaId; });
+    if(!v) return;
+    var linhas = linhasPagamento(v);
+    var subtotal = v.itens.reduce(function(s,i){ return s + i.qtd * i.precoUnit; }, 0);
+
+    var itensHtml = v.itens.map(function(i){
+      return '<div class="recibo-item">' +
+        '<span>' + i.qtd + 'x ' + esc(i.nome) + '</span>' +
+        '<span>' + brl(i.qtd * i.precoUnit) + '</span>' +
+      '</div>';
+    }).join("");
+
+    var pagamentosHtml = linhas.map(function(l){
+      return '<div class="recibo-linha"><span>' + esc(l.forma) + '</span><span>' + brl(l.valor) + '</span></div>';
+    }).join("");
+
+    var html =
+      '<div class="recibo-loja">' + esc(state.nomeLoja || "Minha Loja") + '</div>' +
+      '<div class="recibo-sub">Recibo de venda</div>' +
+      '<div class="recibo-divisor"></div>' +
+      '<div class="recibo-linha"><span>Data</span><span>' + fmtDate(v.data) + ' ' + horaDaVenda(v) + '</span></div>' +
+      '<div class="recibo-linha"><span>Cliente</span><span>' + esc(clienteNome(v.clienteId)) + '</span></div>' +
+      (v.vendedor ? '<div class="recibo-linha"><span>Vendedor</span><span>' + esc(v.vendedor) + '</span></div>' : "") +
+      '<div class="recibo-divisor"></div>' +
+      itensHtml +
+      '<div class="recibo-divisor"></div>' +
+      '<div class="recibo-linha"><span>Subtotal</span><span>' + brl(subtotal) + '</span></div>' +
+      (v.desconto ? '<div class="recibo-linha"><span>Desconto</span><span>- ' + brl(v.desconto) + '</span></div>' : "") +
+      '<div class="recibo-linha recibo-total"><span>Total</span><span>' + brl(v.total) + '</span></div>' +
+      '<div class="recibo-divisor"></div>' +
+      '<div class="recibo-pagamentos-titulo">Forma de pagamento</div>' +
+      pagamentosHtml +
+      '<div class="recibo-rodape">Obrigado pela preferência!</div>';
+
+    document.getElementById("reciboImprimir").innerHTML = html;
+    window.print();
   }
 
   document.getElementById("kpiCardVendas").addEventListener("click", function(e){
@@ -728,7 +800,12 @@
   }
 
   function vendedorOptionsHtml(selecionado){
-    return '<option value="">Selecione...</option>' + state.vendedores.map(function(nome){
+    // Se a venda foi feita por alguém que já saiu da lista de vendedores, mantém
+    // o nome aparecendo (marcado) para não perder a atribuição ao reabrir/editar.
+    var removidoHtml = (selecionado && state.vendedores.indexOf(selecionado) === -1)
+      ? '<option value="' + esc(selecionado) + '" selected>' + esc(selecionado) + ' (removido)</option>'
+      : "";
+    return '<option value="">Selecione...</option>' + removidoHtml + state.vendedores.map(function(nome){
       return '<option value="' + esc(nome) + '"' + (nome === selecionado ? " selected" : "") + '>' + esc(nome) + '</option>';
     }).join("");
   }
@@ -1116,10 +1193,12 @@
   document.getElementById("buscaVendas").addEventListener("input", function(e){ renderVendas(e.target.value); });
 
   // ---------- Filtro de período (calendário: clique no dia inicial, depois no final) ----------
-  (function(){
-    var popover = document.getElementById("periodoPopover");
-    var btn = document.getElementById("btnPeriodoVendas");
-    var label = document.getElementById("btnPeriodoVendasLabel");
+  // Reutilizável: cada chamada cria seu próprio calendário independente, ligado
+  // a um botão/popover específicos, avisando o chamador via onAplicar/onLimpar.
+  function criarSeletorPeriodo(botaoId, popoverId, labelId, onAplicar, onLimpar){
+    var popover = document.getElementById(popoverId);
+    var btn = document.getElementById(botaoId);
+    var label = labelId ? document.getElementById(labelId) : null;
     var mesExibido = new Date();
     var selInicio = null;
     var selFim = null;
@@ -1127,12 +1206,6 @@
     function fmtCurto(iso){
       var p = iso.split("-");
       return p[2] + "/" + p[1];
-    }
-
-    function atualizarLabel(){
-      label.textContent = (vendasRangeInicio && vendasRangeFim)
-        ? (fmtCurto(vendasRangeInicio) + " – " + fmtCurto(vendasRangeFim))
-        : "Período";
     }
 
     function isoDe(ano, mes, dia){
@@ -1205,17 +1278,15 @@
       popover.querySelector("#calLimpar").addEventListener("click", function(){
         selInicio = null;
         selFim = null;
-        vendasRangeInicio = null;
-        vendasRangeFim = null;
-        atualizarLabel();
-        renderVendas(document.getElementById("buscaVendas").value);
+        if(label) label.textContent = "Período";
+        onLimpar();
         popover.classList.add("hidden");
       });
       popover.querySelector("#calAplicar").addEventListener("click", function(){
-        vendasRangeInicio = selInicio;
-        vendasRangeFim = selFim || selInicio;
-        atualizarLabel();
-        renderVendas(document.getElementById("buscaVendas").value);
+        var fim = selFim || selInicio;
+        if(!selInicio) return;
+        if(label) label.textContent = fmtCurto(selInicio) + " – " + fmtCurto(fim);
+        onAplicar(selInicio, fim);
         popover.classList.add("hidden");
       });
     }
@@ -1225,9 +1296,6 @@
       var abrindo = popover.classList.contains("hidden");
       popover.classList.toggle("hidden");
       if(abrindo){
-        selInicio = vendasRangeInicio;
-        selFim = vendasRangeFim;
-        if(selInicio) mesExibido = new Date(selInicio + "T00:00:00");
         renderCalendario();
       }
     });
@@ -1242,11 +1310,23 @@
         popover.classList.add("hidden");
       }
     });
-  })();
+  }
+
+  criarSeletorPeriodo("btnPeriodoVendas", "periodoPopover", "btnPeriodoVendasLabel", function(inicio, fim){
+    vendasRangeInicio = inicio;
+    vendasRangeFim = fim;
+    renderVendas(document.getElementById("buscaVendas").value);
+  }, function(){
+    vendasRangeInicio = null;
+    vendasRangeFim = null;
+    renderVendas(document.getElementById("buscaVendas").value);
+  });
 
   document.getElementById("tblVendas").addEventListener("click", function(e){
     var editId = e.target.dataset.editVenda;
     var delId = e.target.dataset.delVenda;
+    var printBtn = e.target.closest("[data-print-venda]");
+    if(printBtn) imprimirRecibo(printBtn.dataset.printVenda);
     if(editId){
       var vendaEscolhida = state.vendas.find(function(v){ return v.id === editId; });
       if(vendaEscolhida) openVendaModal(vendaEscolhida);
@@ -1674,6 +1754,7 @@
   var EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
   var EYE_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c7 0 10.5 7 10.5 7a13.2 13.2 0 0 1-3.1 4.1M6.5 6.6C3.4 8.5 1.5 12 1.5 12S5 19 12 19a10.6 10.6 0 0 0 4.2-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
   var LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  var PRINT_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="1.5"/><path d="M6 14h12v7H6z"/></svg>';
 
   function pedirSenhaAdmin(onSuccess){
     openModal("Área protegida", (
@@ -1904,6 +1985,160 @@
     });
   }
 
+  // ================= ADMIN =================
+  function vendedorForm(nomeAtual){
+    return (
+      '<div class="field"><label>Nome</label><input id="fNomeVendedor" value="' + esc(nomeAtual || "") + '" placeholder="Nome do vendedor"></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">Salvar</button></div>'
+    );
+  }
+
+  function openVendedorModal(nomeAtual){
+    var isEdit = !!nomeAtual;
+    openModal(isEdit ? "Editar vendedor" : "Novo vendedor", vendedorForm(nomeAtual), function(body){
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelector("#btnSave").addEventListener("click", function(){
+        var novoNome = body.querySelector("#fNomeVendedor").value.trim();
+        if(!novoNome){ toast("Informe o nome do vendedor"); return; }
+        if(isEdit){
+          if(novoNome !== nomeAtual && state.vendedores.indexOf(novoNome) !== -1){
+            toast("Já existe um vendedor com esse nome");
+            return;
+          }
+          var idx = state.vendedores.indexOf(nomeAtual);
+          if(idx !== -1) state.vendedores[idx] = novoNome;
+          // Mantém o histórico de vendas e comissões ligado ao vendedor renomeado.
+          state.vendas.forEach(function(v){ if(v.vendedor === nomeAtual) v.vendedor = novoNome; });
+          toast("Vendedor atualizado");
+        } else {
+          if(state.vendedores.indexOf(novoNome) !== -1){ toast("Já existe um vendedor com esse nome"); return; }
+          state.vendedores.push(novoNome);
+          toast("Vendedor cadastrado");
+        }
+        saveData();
+        closeModal();
+        renderAll();
+      });
+    });
+  }
+
+  function renderVendedores(){
+    var tbody = document.getElementById("tblVendedores");
+    if(state.vendedores.length === 0){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="2">Nenhum vendedor cadastrado.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = state.vendedores.slice().sort().map(function(nome){
+      return '<tr>' +
+        '<td class="cell-strong">' + esc(nome) + '</td>' +
+        '<td class="cell-actions">' +
+          '<button class="btn btn-ghost btn-sm" data-edit-vendedor="' + esc(nome) + '">Editar</button>' +
+          '<button class="btn btn-danger btn-sm" data-del-vendedor="' + esc(nome) + '">Excluir</button>' +
+        '</td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  document.getElementById("btnNovoVendedor").addEventListener("click", function(){ openVendedorModal(null); });
+  document.getElementById("tblVendedores").addEventListener("click", function(e){
+    var editNome = e.target.dataset.editVendedor;
+    var delNome = e.target.dataset.delVendedor;
+    if(editNome) openVendedorModal(editNome);
+    if(delNome){
+      if(confirm('Remover "' + delNome + '" da lista de vendedores? As vendas já lançadas continuam com o nome dele.')){
+        state.vendedores = state.vendedores.filter(function(n){ return n !== delNome; });
+        saveData();
+        renderAll();
+        toast("Vendedor removido");
+      }
+    }
+  });
+
+  document.getElementById("fNomeLoja").addEventListener("change", function(e){
+    state.nomeLoja = e.target.value.trim();
+    saveData();
+  });
+
+  var fechamentoGeralFiltro = { tipo: "mes", inicio: null, fim: null };
+
+  function renderFechamentoGeral(){
+    var f = fechamentoGeralFiltro;
+    var vendasPeriodo = f.tipo === "custom"
+      ? filtrarVendasPorPeriodo("custom", null, f.inicio, f.fim)
+      : filtrarVendasPorPeriodo(f.tipo);
+    var despesasPeriodo = f.tipo === "custom"
+      ? filtrarDespesasPorPeriodo("custom", f.inicio, f.fim)
+      : filtrarDespesasPorPeriodo(f.tipo);
+
+    var pagamentos = somarPorForma(vendasPeriodo);
+    var totalVendas = vendasPeriodo.reduce(function(s,v){ return s + v.total; }, 0);
+    var totalDespesas = despesasPeriodo.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0);
+    var totalDesconto = vendasPeriodo.reduce(function(s,v){ return s + (v.desconto || 0); }, 0);
+    var pct = Number(state.comissaoPercentual) || 0;
+    var totalComissoes = vendasPeriodo.reduce(function(s,v){ return s + (v.vendedor ? v.total * (pct / 100) : 0); }, 0);
+    var lucroLiquido = totalVendas - totalDespesas - totalComissoes;
+
+    document.getElementById("fechamentoGeralConteudo").innerHTML =
+      '<div class="fechamento-grid">' +
+        '<div class="fechamento-box">' +
+          '<div class="fechamento-label">Total de Vendas</div>' +
+          '<div class="fechamento-valor">' + brl(totalVendas) + '</div>' +
+        '</div>' +
+        '<div class="fechamento-box">' +
+          '<div class="fechamento-label">Despesas</div>' +
+          '<div class="fechamento-valor" style="color:var(--danger);">' + brl(totalDespesas) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="fechamento-detalhes">' +
+        '<div class="fechamento-label" style="margin-bottom:0.6rem;">Vendas por forma de pagamento</div>' +
+        fechamentoDetalhesHtml(pagamentos,
+          '<div style="margin-top:0.8rem;padding-top:0.8rem;border-top:2px solid var(--line);">' +
+            '<div class="fechamento-detalhes-row"><span>Descontos concedidos</span><span>- ' + brl(totalDesconto) + '</span></div>' +
+            '<div class="fechamento-detalhes-row"><span>Comissões (' + pct + '%)</span><span>- ' + brl(totalComissoes) + '</span></div>' +
+            '<div class="fechamento-detalhes-row" style="font-weight:700;color:' + (lucroLiquido >= 0 ? "var(--ok)" : "var(--danger)") + ';">' +
+              '<span>Lucro líquido</span><span>' + brl(lucroLiquido) + '</span>' +
+            '</div>' +
+          '</div>'
+        ) +
+      '</div>';
+  }
+
+  document.getElementById("fechamentoGeralFiltros").addEventListener("click", function(e){
+    var btn = e.target.closest("[data-fg-filtro]");
+    if(!btn) return;
+    fechamentoGeralFiltro = { tipo: btn.dataset.fgFiltro, inicio: null, fim: null };
+    document.querySelectorAll("#fechamentoGeralFiltros [data-fg-filtro]").forEach(function(b){
+      b.classList.toggle("btn-primary", b === btn);
+      b.classList.toggle("btn-ghost", b !== btn);
+    });
+    document.getElementById("fechamentoGeralPeriodoLabel").textContent = "";
+    renderFechamentoGeral();
+  });
+
+  criarSeletorPeriodo("btnPeriodoGeral", "periodoGeralPopover", null, function(inicio, fim){
+    fechamentoGeralFiltro = { tipo: "custom", inicio: inicio, fim: fim };
+    document.querySelectorAll("#fechamentoGeralFiltros [data-fg-filtro]").forEach(function(b){
+      b.classList.remove("btn-primary");
+      b.classList.add("btn-ghost");
+    });
+    document.getElementById("fechamentoGeralPeriodoLabel").textContent = fmtDate(inicio) + " a " + fmtDate(fim);
+    renderFechamentoGeral();
+  }, function(){
+    fechamentoGeralFiltro = { tipo: "mes", inicio: null, fim: null };
+    document.querySelectorAll("#fechamentoGeralFiltros [data-fg-filtro]").forEach(function(b){
+      b.classList.toggle("btn-primary", b.dataset.fgFiltro === "mes");
+      b.classList.toggle("btn-ghost", b.dataset.fgFiltro !== "mes");
+    });
+    document.getElementById("fechamentoGeralPeriodoLabel").textContent = "";
+    renderFechamentoGeral();
+  });
+
+  function renderAdmin(){
+    document.getElementById("fNomeLoja").value = state.nomeLoja || "";
+    renderVendedores();
+    renderFechamentoGeral();
+  }
+
   // ================= RENDER ALL =================
   function renderAll(){
     renderDashboard();
@@ -1911,6 +2146,7 @@
     renderProdutos(document.getElementById("buscaProdutos").value);
     renderVendas(document.getElementById("buscaVendas").value);
     renderFinanceiro();
+    renderAdmin();
   }
 
   // ================= EXPORTAR / IMPORTAR =================
