@@ -288,7 +288,7 @@
         '<td>' + esc(itensResumo) + '</td>' +
         '<td>' + esc(v.pagamento) + '</td>' +
         '<td class="cell-strong">' + brl(v.total) + '</td>' +
-        '<td class="cell-actions"><button class="btn btn-danger btn-sm" data-del-venda="' + v.id + '">Excluir</button></td>' +
+        '<td class="cell-actions"><button class="btn btn-ghost btn-sm" data-edit-venda="' + v.id + '">Editar</button><button class="btn btn-danger btn-sm" data-del-venda="' + v.id + '">Excluir</button></td>' +
       '</tr>';
     }).join("");
   }
@@ -677,37 +677,53 @@
     );
   }
 
-  function vendaForm(){
+  function vendaForm(venda){
     var clienteOptions = '<option value="">Consumidor final</option>' + state.clientes.map(function(c){
-      return '<option value="' + c.id + '">' + esc(c.nome) + '</option>';
+      var sel = venda && venda.clienteId === c.id ? "selected" : "";
+      return '<option value="' + c.id + '" ' + sel + '>' + esc(c.nome) + '</option>';
     }).join("");
+    var vendaDataStr = venda ? venda.data : todayISO();
+    var vendaPagamento = venda ? venda.pagamento : "Dinheiro";
+    var vendaRows = venda
+      ? venda.itens.map(function(i, idx){
+          return vendaFormRow({ produtoId: i.produtoId, nome: i.nome, qtd: i.qtd, precoUnit: i.precoUnit }, idx);
+        }).join("")
+      : vendaFormRow(null, 0);
+    var btnSaveText = venda ? "Atualizar venda" : "Registrar venda";
+    var pagarSel = vendaPagamento === "A prazo" ? "selected" : "";
+    var dinheiroSel = vendaPagamento === "Dinheiro" ? "selected" : "";
+    var creditoSel = vendaPagamento === "Cartão de crédito" ? "selected" : "";
+    var debitoSel = vendaPagamento === "Cartão de débito" ? "selected" : "";
+    var pixSel = vendaPagamento === "Pix" ? "selected" : "";
     return (
       '<div class="field-row">' +
         '<div class="field"><label>Cliente</label><select id="fCliente">' + clienteOptions + '</select></div>' +
         '<div class="field"><label>Forma de pagamento</label><select id="fPagamento">' +
-          '<option value="Dinheiro">Dinheiro</option>' +
-          '<option value="Cartão de crédito">Cartão de crédito</option>' +
-          '<option value="Cartão de débito">Cartão de débito</option>' +
-          '<option value="Pix">Pix</option>' +
-          '<option value="A prazo">A prazo</option>' +
+          '<option value="Dinheiro" ' + dinheiroSel + '>Dinheiro</option>' +
+          '<option value="Cartão de crédito" ' + creditoSel + '>Cartão de crédito</option>' +
+          '<option value="Cartão de débito" ' + debitoSel + '>Cartão de débito</option>' +
+          '<option value="Pix" ' + pixSel + '>Pix</option>' +
+          '<option value="A prazo" ' + pagarSel + '>A prazo</option>' +
         '</select></div>' +
       '</div>' +
-      '<div class="field"><label>Data</label><input id="fData" type="date" value="' + todayISO() + '"></div>' +
+      '<div class="field"><label>Data</label><input id="fData" type="date" value="' + vendaDataStr + '"></div>' +
       '<div class="venda-items" id="vendaItems">' +
-        '<div id="vendaRows">' + vendaFormRow(null, 0) + '</div>' +
+        '<div id="vendaRows">' + vendaRows + '</div>' +
         '<button type="button" class="btn btn-ghost btn-sm" id="btnAddItem" style="margin-top:0.4rem;">+ Adicionar item</button>' +
         '<div class="venda-total"><span>Total</span><span id="vendaTotalValor">R$ 0,00</span></div>' +
       '</div>' +
-      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">Registrar venda</button></div>'
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">' + btnSaveText + '</button></div>'
     );
   }
 
-  function openVendaModal(){
+  function openVendaModal(venda){
     if(state.produtos.length === 0){
       toast("Cadastre um produto antes de registrar uma venda");
       return;
     }
-    openModal("Nova venda", vendaForm(), function(body){
+    var isEdit = !!venda;
+    var title = isEdit ? "Editar venda" : "Nova venda";
+    openModal(title, vendaForm(venda), function(body){
       var rowsEl = body.querySelector("#vendaRows");
       var rowCount = 1;
 
@@ -768,37 +784,67 @@
         var clienteId = body.querySelector("#fCliente").value || null;
 
         function finalizarVenda(){
-          var venda = {
-            id: uid(),
-            data: dataEscolhida,
-            criadoEm: new Date().toISOString(),
-            clienteId: clienteId,
-            itens: itens,
-            total: total,
-            pagamento: pagamento
-          };
+          if(isEdit){
+            venda.clienteId = clienteId;
+            venda.pagamento = pagamento;
+            venda.data = dataEscolhida;
 
-          itens.forEach(function(i){
-            var prod = state.produtos.find(function(p){ return p.id === i.produtoId; });
-            prod.estoque = Math.max(0, prod.estoque - i.qtd);
-          });
+            venda.itens.forEach(function(i){
+              var prod = state.produtos.find(function(p){ return p.id === i.produtoId; });
+              prod.estoque = Math.max(0, prod.estoque + i.qtd);
+            });
 
-          state.vendas.push(venda);
+            venda.itens = itens;
+            venda.total = total;
 
-          state.contas.push({
-            id: uid(),
-            descricao: "Venda - " + clienteNome(venda.clienteId),
-            tipo: "receber",
-            vencimento: venda.data,
-            valor: total,
-            status: pagamento === "A prazo" ? "pendente" : "pago",
-            vendaId: venda.id
-          });
+            itens.forEach(function(i){
+              var prod = state.produtos.find(function(p){ return p.id === i.produtoId; });
+              prod.estoque = Math.max(0, prod.estoque - i.qtd);
+            });
+
+            var conta = state.contas.find(function(c){ return c.vendaId === venda.id; });
+            if(conta){
+              conta.descricao = "Venda - " + clienteNome(venda.clienteId);
+              conta.valor = total;
+              conta.vencimento = venda.data;
+              conta.status = pagamento === "A prazo" ? "pendente" : "pago";
+            }
+
+            toast("Venda atualizada");
+          } else {
+            var novaVenda = {
+              id: uid(),
+              data: dataEscolhida,
+              criadoEm: new Date().toISOString(),
+              clienteId: clienteId,
+              itens: itens,
+              total: total,
+              pagamento: pagamento
+            };
+
+            itens.forEach(function(i){
+              var prod = state.produtos.find(function(p){ return p.id === i.produtoId; });
+              prod.estoque = Math.max(0, prod.estoque - i.qtd);
+            });
+
+            state.vendas.push(novaVenda);
+
+            state.contas.push({
+              id: uid(),
+              descricao: "Venda - " + clienteNome(novaVenda.clienteId),
+              tipo: "receber",
+              vencimento: novaVenda.data,
+              valor: total,
+              status: pagamento === "A prazo" ? "pendente" : "pago",
+              vendaId: novaVenda.id
+            });
+
+            toast("Venda registrada");
+          }
 
           saveData();
           closeModal();
           renderAll();
-          toast("Venda registrada");
         }
 
         if(dataEscolhida !== todayISO()){
@@ -810,10 +856,15 @@
     });
   }
 
-  document.getElementById("btnNovaVenda").addEventListener("click", openVendaModal);
+  document.getElementById("btnNovaVenda").addEventListener("click", function(){ openVendaModal(); });
   document.getElementById("buscaVendas").addEventListener("input", function(e){ renderVendas(e.target.value); });
   document.getElementById("tblVendas").addEventListener("click", function(e){
+    var editId = e.target.dataset.editVenda;
     var delId = e.target.dataset.delVenda;
+    if(editId){
+      var vendaEscolhida = state.vendas.find(function(v){ return v.id === editId; });
+      if(vendaEscolhida) openVendaModal(vendaEscolhida);
+    }
     if(delId){
       if(confirm("Excluir esta venda? O estoque não será restaurado automaticamente.")){
         state.vendas = state.vendas.filter(function(v){ return v.id !== delId; });
@@ -842,7 +893,8 @@
           '<td>' + brl(c.valor) + '</td>' +
           '<td>' + badge + '</td>' +
           '<td class="cell-actions">' +
-            (c.status === "pendente" ? '<button class="btn btn-ghost btn-sm" data-pay-conta="' + c.id + '">Marcar como pago</button>' : '') +
+            '<button class="btn btn-ghost btn-sm" data-edit-conta="' + c.id + '">Editar</button>' +
+            (c.status === "pendente" ? '<button class="btn btn-ghost btn-sm" data-pay-conta="' + c.id + '">Pago</button>' : '') +
             '<button class="btn btn-danger btn-sm" data-del-conta="' + c.id + '">Excluir</button>' +
           '</td>' +
         '</tr>';
@@ -862,7 +914,8 @@
           '<td>' + brl(c.valor) + '</td>' +
           '<td><span class="badge badge-warn">pendente</span></td>' +
           '<td class="cell-actions">' +
-            '<button class="btn btn-ghost btn-sm" data-recebido-conta="' + c.id + '">Marcar recebido</button>' +
+            '<button class="btn btn-ghost btn-sm" data-edit-devedor="' + c.id + '">Editar</button>' +
+            '<button class="btn btn-ghost btn-sm" data-recebido-conta="' + c.id + '">Recebido</button>' +
             '<button class="btn btn-danger btn-sm" data-del-devedor="' + c.id + '">Remover</button>' +
           '</td>' +
         '</tr>';
@@ -907,30 +960,38 @@
     }).join("");
   }
 
-  function contaForm(){
+  function contaForm(conta){
+    conta = conta || {};
+    var tipoSel1 = (conta.tipo === "pagar") ? "selected" : "";
+    var tipoSel2 = (conta.tipo === "receber") ? "selected" : "";
+    var statusSel1 = (conta.status === "pendente") ? "selected" : "";
+    var statusSel2 = (conta.status === "pago") ? "selected" : "";
+    var btnSaveText = conta.id ? "Atualizar" : "Salvar";
     return (
-      '<div class="field"><label>Descrição</label><input id="fDescricao" placeholder="Ex: Aluguel, fornecedor..."></div>' +
+      '<div class="field"><label>Descrição</label><input id="fDescricao" value="' + esc(conta.descricao||"") + '" placeholder="Ex: Aluguel, fornecedor..."></div>' +
       '<div class="field-row">' +
-        '<div class="field"><label>Tipo</label><select id="fTipo"><option value="pagar">A pagar</option><option value="receber">A receber</option></select></div>' +
-        '<div class="field"><label>Valor</label><input id="fValor" type="number" min="0" step="0.01"></div>' +
+        '<div class="field"><label>Tipo</label><select id="fTipo"><option value="pagar" ' + tipoSel1 + '>A pagar</option><option value="receber" ' + tipoSel2 + '>A receber</option></select></div>' +
+        '<div class="field"><label>Valor</label><input id="fValor" type="number" min="0" step="0.01" value="' + (conta.valor||"") + '"></div>' +
       '</div>' +
       '<div class="field-row">' +
         '<div class="field"><label>Natureza</label><div style="display:flex;gap:0.4rem;">' +
-          '<select id="fNatureza" style="flex:1;">' + naturezaOptionsHtml() + '</select>' +
+          '<select id="fNatureza" style="flex:1;">' + naturezaOptionsHtml(conta.natureza) + '</select>' +
           '<button type="button" class="btn btn-ghost btn-sm" id="btnNovaNatureza" title="Adicionar nova natureza">+</button>' +
         '</div></div>' +
-        '<div class="field"><label>Forma de pagamento</label><select id="fFormaPagamento">' + formaPagamentoOptionsHtml() + '</select></div>' +
+        '<div class="field"><label>Forma de pagamento</label><select id="fFormaPagamento">' + formaPagamentoOptionsHtml(conta.formaPagamento) + '</select></div>' +
       '</div>' +
       '<div class="field-row">' +
-        '<div class="field"><label>Vencimento</label><input id="fVencimento" type="date" value="' + todayISO() + '"></div>' +
-        '<div class="field"><label>Status</label><select id="fStatus"><option value="pendente">Pendente</option><option value="pago">Pago</option></select></div>' +
+        '<div class="field"><label>Vencimento</label><input id="fVencimento" type="date" value="' + (conta.vencimento||todayISO()) + '"></div>' +
+        '<div class="field"><label>Status</label><select id="fStatus"><option value="pendente" ' + statusSel1 + '>Pendente</option><option value="pago" ' + statusSel2 + '>Pago</option></select></div>' +
       '</div>' +
-      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">Salvar</button></div>'
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">' + btnSaveText + '</button></div>'
     );
   }
 
-  document.getElementById("btnNovaConta").addEventListener("click", function(){
-    openModal("Nova conta", contaForm(), function(body){
+  function openContaModal(conta){
+    var isEdit = !!conta;
+    var title = isEdit ? "Editar conta" : "Nova conta";
+    openModal(title, contaForm(conta), function(body){
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
 
       body.querySelector("#btnNovaNatureza").addEventListener("click", function(){
@@ -950,22 +1011,37 @@
         var descricao = body.querySelector("#fDescricao").value.trim();
         var valor = parseFloat(body.querySelector("#fValor").value) || 0;
         if(!descricao || valor <= 0){ toast("Preencha descrição e valor"); return; }
-        state.contas.push({
-          id: uid(),
-          descricao: descricao,
-          tipo: body.querySelector("#fTipo").value,
-          natureza: body.querySelector("#fNatureza").value || null,
-          formaPagamento: body.querySelector("#fFormaPagamento").value || null,
-          valor: valor,
-          vencimento: body.querySelector("#fVencimento").value || todayISO(),
-          status: body.querySelector("#fStatus").value
-        });
+        if(isEdit){
+          conta.descricao = descricao;
+          conta.tipo = body.querySelector("#fTipo").value;
+          conta.natureza = body.querySelector("#fNatureza").value || null;
+          conta.formaPagamento = body.querySelector("#fFormaPagamento").value || null;
+          conta.valor = valor;
+          conta.vencimento = body.querySelector("#fVencimento").value || todayISO();
+          conta.status = body.querySelector("#fStatus").value;
+          toast("Conta atualizada");
+        } else {
+          state.contas.push({
+            id: uid(),
+            descricao: descricao,
+            tipo: body.querySelector("#fTipo").value,
+            natureza: body.querySelector("#fNatureza").value || null,
+            formaPagamento: body.querySelector("#fFormaPagamento").value || null,
+            valor: valor,
+            vencimento: body.querySelector("#fVencimento").value || todayISO(),
+            status: body.querySelector("#fStatus").value
+          });
+          toast("Conta lançada");
+        }
         saveData();
         closeModal();
         renderAll();
-        toast("Conta lançada");
       });
     });
+  }
+
+  document.getElementById("btnNovaConta").addEventListener("click", function(){
+    openContaModal(null);
   });
 
   document.getElementById("btnNovoDevedor").addEventListener("click", function(){
@@ -1002,8 +1078,13 @@
   });
 
   document.getElementById("tblContas").addEventListener("click", function(e){
+    var editId = e.target.dataset.editConta;
     var payId = e.target.dataset.payConta;
     var delId = e.target.dataset.delConta;
+    if(editId){
+      var c = state.contas.find(function(c){ return c.id === editId; });
+      if(c) openContaModal(c);
+    }
     if(payId){
       var c = state.contas.find(function(c){ return c.id === payId; });
       if(c){ c.status = "pago"; saveData(); renderAll(); toast("Conta marcada como paga"); }
@@ -1020,8 +1101,13 @@
   });
 
   document.getElementById("tblDevedores").addEventListener("click", function(e){
+    var editId = e.target.dataset.editDevedor;
     var recebidoId = e.target.dataset.recebidoConta;
     var delId = e.target.dataset.delDevedor;
+    if(editId){
+      var c = state.contas.find(function(c){ return c.id === editId; });
+      if(c) openContaModal(c);
+    }
     if(recebidoId){
       var c = state.contas.find(function(c){ return c.id === recebidoId; });
       if(c){ c.status = "pago"; saveData(); renderAll(); toast("Dívida marcada como recebida"); }
@@ -1247,6 +1333,35 @@
         }).join("");
 
     renderGraficos();
+    renderAlertas();
+  }
+
+  function renderAlertas(){
+    var hoje = todayISO();
+    var vencidas = state.contas.filter(function(c){
+      return c.tipo === "pagar" && c.status === "pendente" && c.vencimento < hoje;
+    });
+    var container = document.getElementById("alertasContainer");
+    if(vencidas.length === 0){
+      container.innerHTML = "";
+      return;
+    }
+    container.innerHTML = vencidas.map(function(c){
+      return '<div class="alerta-item" data-conta-id="' + esc(c.id) + '" title="Clique para ver detalhes">' +
+        '<div class="alerta-conteudo">' +
+          '<div class="alerta-descricao">' + esc(c.descricao) + '</div>' +
+          '<div class="alerta-detalhes">' + esc(c.natureza || "-") + ' • Venceu em ' + fmtDate(c.vencimento) + '</div>' +
+        '</div>' +
+        '<div class="alerta-valor">' + brl(c.valor) + '</div>' +
+      '</div>';
+    }).join("");
+    container.addEventListener("click", function(e){
+      var alerta = e.target.closest(".alerta-item");
+      if(alerta){
+        var contaId = alerta.dataset.contaId;
+        abrirDetalhesDespesas("data", contaId);
+      }
+    });
   }
 
   // ================= RENDER ALL =================

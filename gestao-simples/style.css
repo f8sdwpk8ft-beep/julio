@@ -217,6 +217,20 @@ tbody tr:hover{background:#fafbfd;}
 .badge-danger{background:var(--danger-tint);color:var(--danger);}
 .badge-muted{background:#eef1f5;color:var(--ink-dim);}
 
+/* ---------- Alertas ---------- */
+.alertas-container{margin-bottom:1.5rem;}
+.alerta-item{
+  background:var(--warn-tint);border-left:4px solid var(--warn);
+  border-radius:8px;padding:0.85rem 1rem;margin-bottom:0.6rem;
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  cursor:pointer;transition:box-shadow .15s ease;
+}
+.alerta-item:hover{box-shadow:0 4px 12px rgba(217,130,43,0.15);}
+.alerta-conteudo{flex:1;min-width:0;}
+.alerta-descricao{font-size:0.85rem;color:var(--ink);font-weight:600;}
+.alerta-detalhes{font-size:0.75rem;color:var(--ink-dim);margin-top:0.25rem;}
+.alerta-valor{font-weight:800;color:var(--warn);white-space:nowrap;margin-left:0.5rem;}
+
 /* ---------- Forms / Modal ---------- */
 .field{margin-bottom:0.9rem;}
 .field label{display:block;font-size:0.78rem;font-weight:700;color:var(--ink-dim);margin-bottom:0.35rem;}
