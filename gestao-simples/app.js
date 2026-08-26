@@ -545,7 +545,7 @@
   }
 
   function abrirDetalhesDespesas(){
-    var estadoFiltro = { filtro: "hoje", data: todayISO() };
+    var estadoFiltro = { filtro: "mes", data: todayISO() };
 
     openModal("Despesas", despesasDetalheHtml(estadoFiltro.filtro, estadoFiltro.data), function(body){
       function renderLista(){
@@ -621,6 +621,46 @@
     if(e.target.closest(".kpi-eye")) return;
     abrirDetalhesDespesas();
   });
+
+  document.getElementById("kpiCardDespesasTotal").addEventListener("click", function(e){
+    if(e.target.closest(".kpi-eye")) return;
+    abrirDetalhesDespesas();
+  });
+
+  function abrirVendasHoje(){
+    var hoje = todayISO();
+    var vendasHoje = state.vendas.filter(function(v){ return v.data === hoje; });
+
+    openModal("Vendas de hoje", vendasDetalheHtml("data", hoje), function(body){
+      function renderLista(){
+        var lista = vendasHoje.sort(function(a,b){
+          return (b.criadoEm || b.data).localeCompare(a.criadoEm || a.data);
+        });
+        var tbody = body.querySelector("#vdTbody");
+        tbody.innerHTML = lista.length === 0
+          ? '<tr class="empty-row"><td colspan="4">Nenhuma venda hoje.</td></tr>'
+          : lista.map(function(v){
+              return '<tr class="vd-row" data-vd-venda="' + v.id + '">' +
+                '<td>' + fmtDate(v.data) + '</td>' +
+                '<td>' + horaDaVenda(v) + '</td>' +
+                '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + '</td>' +
+                '<td class="cell-strong">' + brl(v.total) + '</td>' +
+              '</tr>';
+            }).join("");
+        body.querySelector("#vdTotalValor").textContent = brl(lista.reduce(function(s,v){ return s + v.total; }, 0));
+        body.querySelector("#vdPagamentos").innerHTML = pagamentosChipsHtml(lista);
+      }
+
+      body.querySelector("#vdTbody").addEventListener("click", function(e){
+        var row = e.target.closest("[data-vd-venda]");
+        if(row) abrirDetalheVenda(row.dataset.vdVenda);
+      });
+
+      renderLista();
+    }, { large: true });
+  }
+
+  document.getElementById("finVendasHojeRow").addEventListener("click", abrirVendasHoje);
 
   function vendaFormRow(item, idx){
     var options = state.produtos.map(function(p){
@@ -785,17 +825,18 @@
 
   // ================= FINANCEIRO =================
   function renderFinanceiro(){
+    var hoje = todayISO();
+    var despesas = state.contas.filter(function(c){ return c.tipo === "pagar"; }).slice().sort(function(a,b){ return a.vencimento.localeCompare(b.vencimento); });
+
     var tbody = document.getElementById("tblContas");
-    var list = state.contas.slice().sort(function(a,b){ return a.vencimento.localeCompare(b.vencimento); });
-    if(list.length === 0){
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Nenhuma conta lançada.</td></tr>';
+    if(despesas.length === 0){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhuma despesa lançada.</td></tr>';
     } else {
-      tbody.innerHTML = list.map(function(c){
+      tbody.innerHTML = despesas.map(function(c){
         var badge = c.status === "pago" ? '<span class="badge badge-ok">pago</span>' : '<span class="badge badge-warn">pendente</span>';
         return '<tr>' +
           '<td class="cell-strong">' + esc(c.descricao) + '</td>' +
           '<td>' + esc(c.natureza || "-") + '</td>' +
-          '<td>' + (c.tipo === "receber" ? "A receber" : "A pagar") + '</td>' +
           '<td>' + esc(c.formaPagamento || "-") + '</td>' +
           '<td>' + fmtDate(c.vencimento) + '</td>' +
           '<td>' + brl(c.valor) + '</td>' +
@@ -808,23 +849,24 @@
       }).join("");
     }
 
-    var hoje = todayISO();
-    var receberPendente = sum(state.contas.filter(function(c){ return c.tipo === "receber" && c.status === "pendente"; }));
     var pagarPendente = sum(state.contas.filter(function(c){ return c.tipo === "pagar" && c.status === "pendente"; }));
+    var despesasMes = state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento.slice(0,7) === hoje.slice(0,7); });
+    var despesasTotalMes = sum(despesasMes);
     var vendedMes = state.vendas.filter(function(v){ return v.data.slice(0,7) === hoje.slice(0,7); });
     var totalMes = vendedMes.reduce(function(s,v){ return s + v.total; }, 0);
 
     document.getElementById("kpiTotal").textContent = kpiVisiveis ? brl(totalMes) : "R$ ••••";
-    document.getElementById("finReceberPendente").textContent = brl(receberPendente);
+    document.getElementById("kpiDespesasTotal").textContent = kpiVisiveis ? brl(despesasTotalMes) : "R$ ••••";
     document.getElementById("finPagarPendente").textContent = brl(pagarPendente);
 
-    var eyeBtn = document.getElementById("eyeTotal");
-    if(eyeBtn){
-      eyeBtn.innerHTML = kpiVisiveis ? EYE_OPEN_SVG : EYE_OFF_SVG;
-      eyeBtn.setAttribute("aria-pressed", kpiVisiveis ? "true" : "false");
-      eyeBtn.setAttribute("aria-label", kpiVisiveis ? "Ocultar valor" : "Mostrar valor");
-      eyeBtn.title = kpiVisiveis ? "Ocultar valor" : "Mostrar valor";
-    }
+    [document.getElementById("eyeTotal"), document.getElementById("eyeDespesasTotal")].forEach(function(eyeBtn){
+      if(eyeBtn){
+        eyeBtn.innerHTML = kpiVisiveis ? EYE_OPEN_SVG : EYE_OFF_SVG;
+        eyeBtn.setAttribute("aria-pressed", kpiVisiveis ? "true" : "false");
+        eyeBtn.setAttribute("aria-label", kpiVisiveis ? "Ocultar valor" : "Mostrar valor");
+        eyeBtn.title = kpiVisiveis ? "Ocultar valor" : "Mostrar valor";
+      }
+    });
 
     var vendasHoje = state.vendas.filter(function(v){ return v.data === hoje; });
     document.getElementById("finVendasHojeTotal").textContent = brl(vendasHoje.reduce(function(s,v){ return s + v.total; }, 0));
@@ -963,6 +1005,7 @@
   document.getElementById("eyeDespesas").addEventListener("click", toggleKpiVisiveis);
   document.getElementById("eyeTotalLoja").addEventListener("click", toggleKpiVisiveis);
   document.getElementById("eyeTotal").addEventListener("click", toggleKpiVisiveis);
+  document.getElementById("eyeDespesasTotal").addEventListener("click", toggleKpiVisiveis);
 
   function toggleGraficosVisiveis(){
     if(graficosVisiveis){
