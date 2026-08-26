@@ -3,7 +3,7 @@
 
   var STORAGE_KEY = "gestao-simples-data-v1";
 
-  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"] };
+  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], vendedores: [], comissaoPercentual: 5 };
 
   function loadData(){
     try{
@@ -115,12 +115,13 @@
       return c.nome.toLowerCase().indexOf(filter.toLowerCase()) !== -1;
     });
     if(list.length === 0){
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Nenhum cliente cadastrado.</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhum cliente cadastrado.</td></tr>';
       return;
     }
     tbody.innerHTML = list.map(function(c){
       return '<tr>' +
         '<td class="cell-strong">' + esc(c.nome) + '</td>' +
+        '<td>' + esc(c.cpf || "-") + '</td>' +
         '<td>' + esc(c.telefone || "-") + '</td>' +
         '<td>' + esc(c.email || "-") + '</td>' +
         '<td>' + esc(c.obs || "-") + '</td>' +
@@ -135,7 +136,10 @@
   function clienteForm(cliente){
     cliente = cliente || {};
     return (
-      '<div class="field"><label>Nome</label><input id="fNome" value="' + esc(cliente.nome||"") + '" placeholder="Nome do cliente"></div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>Nome</label><input id="fNome" value="' + esc(cliente.nome||"") + '" placeholder="Nome do cliente"></div>' +
+        '<div class="field"><label>CPF</label><input id="fCpf" value="' + esc(cliente.cpf||"") + '" placeholder="000.000.000-00"></div>' +
+      '</div>' +
       '<div class="field-row">' +
         '<div class="field"><label>Telefone</label><input id="fTelefone" value="' + esc(cliente.telefone||"") + '" placeholder="(00) 00000-0000"></div>' +
         '<div class="field"><label>E-mail</label><input id="fEmail" value="' + esc(cliente.email||"") + '" placeholder="email@exemplo.com"></div>' +
@@ -154,6 +158,7 @@
         if(!nome){ toast("Informe o nome do cliente"); return; }
         var data = {
           nome: nome,
+          cpf: body.querySelector("#fCpf").value.trim(),
           telefone: body.querySelector("#fTelefone").value.trim(),
           email: body.querySelector("#fEmail").value.trim(),
           obs: body.querySelector("#fObs").value.trim()
@@ -269,15 +274,22 @@
   });
 
   // ================= VENDAS =================
+  var vendasRangeInicio = null;
+  var vendasRangeFim = null;
+
   function renderVendas(filter){
     var tbody = document.getElementById("tblVendas");
+    var filterLower = (filter || "").toLowerCase();
     var list = state.vendas.slice().sort(function(a,b){ return b.data.localeCompare(a.data); }).filter(function(v){
-      if(!filter) return true;
+      if(vendasRangeInicio && v.data < vendasRangeInicio) return false;
+      if(vendasRangeFim && v.data > vendasRangeFim) return false;
+      if(!filterLower) return true;
       var nome = clienteNome(v.clienteId).toLowerCase();
-      return nome.indexOf(filter.toLowerCase()) !== -1;
+      if(nome.indexOf(filterLower) !== -1) return true;
+      return v.itens.some(function(i){ return i.nome.toLowerCase().indexOf(filterLower) !== -1; });
     });
     if(list.length === 0){
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhuma venda registrada.</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhuma venda encontrada.</td></tr>';
       return;
     }
     tbody.innerHTML = list.map(function(v){
@@ -286,7 +298,7 @@
         '<td>' + fmtDate(v.data) + '</td>' +
         '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + '</td>' +
         '<td>' + esc(itensResumo) + '</td>' +
-        '<td>' + esc(v.pagamento) + '</td>' +
+        '<td>' + esc(pagamentoResumoLabel(v)) + '</td>' +
         '<td class="cell-strong">' + brl(v.total) + '</td>' +
         '<td class="cell-actions"><button class="btn btn-ghost btn-sm" data-edit-venda="' + v.id + '">Editar</button><button class="btn btn-danger btn-sm" data-del-venda="' + v.id + '">Excluir</button></td>' +
       '</tr>';
@@ -294,9 +306,9 @@
   }
 
   function clienteNome(id){
-    if(!id) return "Consumidor final";
+    if(!id) return "Consumidor";
     var c = state.clientes.find(function(c){ return c.id === id; });
-    return c ? c.nome : "Consumidor final";
+    return c ? c.nome : "Consumidor";
   }
 
   // ---------- Detalhes de vendas (por período) ----------
@@ -337,10 +349,33 @@
   }
 
   var METODOS_PAGAMENTO = ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix"];
+  var FORMAS_PAGAMENTO_VENDA = METODOS_PAGAMENTO.concat(["Pagamento futuro"]);
+
+  function normalizarFormaPagamento(forma){
+    return forma === "A prazo" ? "Pagamento futuro" : forma;
+  }
+
+  // Normaliza qualquer venda (antiga ou nova) para uma lista de linhas {forma, valor},
+  // permitindo pagamento dividido entre várias formas sem quebrar vendas já salvas.
+  function linhasPagamento(v){
+    if(v.pagamentos && v.pagamentos.length){
+      return v.pagamentos.map(function(l){ return { forma: normalizarFormaPagamento(l.forma), valor: l.valor }; });
+    }
+    return [{ forma: normalizarFormaPagamento(v.pagamento || "Dinheiro"), valor: v.total }];
+  }
+
+  function pagamentoResumoLabel(v){
+    var linhas = linhasPagamento(v);
+    if(linhas.length <= 1) return linhas[0] ? linhas[0].forma : "-";
+    return "Dividido (" + linhas.length + " formas)";
+  }
 
   function resumoPorPagamento(lista){
-    return METODOS_PAGAMENTO.map(function(m){
-      var total = lista.filter(function(v){ return v.pagamento === m; }).reduce(function(s,v){ return s + v.total; }, 0);
+    return METODOS_PAGAMENTO.concat(["Pagamento futuro"]).map(function(m){
+      var total = 0;
+      lista.forEach(function(v){
+        linhasPagamento(v).forEach(function(l){ if(l.forma === m) total += l.valor; });
+      });
       return { metodo: m, total: total };
     });
   }
@@ -418,12 +453,20 @@
     var itensHtml = v.itens.map(function(i){
       return '<div>' + i.qtd + 'x ' + esc(i.nome) + ' — ' + brl(i.precoUnit) + '</div>';
     }).join("");
+    var linhas = linhasPagamento(v);
+    var pagamentoHtml = linhas.length === 1
+      ? esc(linhas[0].forma)
+      : linhas.map(function(l){ return esc(l.forma) + ": " + brl(l.valor); }).join(" · ");
+    var vendedorLinha = v.vendedor ? '<div class="venda-detalhe-linha"><span>Vendedor</span><span>' + esc(v.vendedor) + '</span></div>' : "";
+    var descontoLinha = v.desconto ? '<div class="venda-detalhe-linha"><span>Desconto</span><span>- ' + brl(v.desconto) + '</span></div>' : "";
     openModal("Detalhes da venda", (
       '<div class="venda-detalhe-linha"><span>Data</span><span>' + fmtDate(v.data) + '</span></div>' +
       '<div class="venda-detalhe-linha"><span>Horário</span><span>' + horaDaVenda(v) + '</span></div>' +
       '<div class="venda-detalhe-linha"><span>Cliente</span><span>' + esc(clienteNome(v.clienteId)) + '</span></div>' +
-      '<div class="venda-detalhe-linha"><span>Pagamento</span><span>' + esc(v.pagamento) + '</span></div>' +
+      vendedorLinha +
+      '<div class="venda-detalhe-linha"><span>Pagamento</span><span>' + pagamentoHtml + '</span></div>' +
       '<div class="venda-detalhe-itens">' + itensHtml + '</div>' +
+      descontoLinha +
       '<div class="venda-total"><span>Total</span><span>' + brl(v.total) + '</span></div>' +
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnVoltarLista">Voltar</button><button class="btn btn-primary" id="btnFecharDetalhe">Fechar</button></div>'
     ), function(body){
@@ -663,13 +706,14 @@
   document.getElementById("finVendasHojeRow").addEventListener("click", abrirVendasHoje);
 
   function vendaFormRow(item, idx){
-    var options = state.produtos.map(function(p){
-      var sel = item && item.produtoId === p.id ? "selected" : "";
-      return '<option value="' + p.id + '" ' + sel + '>' + esc(p.nome) + ' (' + p.estoque + ' em estoque)</option>';
-    }).join("");
+    var produtoAtual = item ? state.produtos.find(function(p){ return p.id === item.produtoId; }) : null;
     return (
       '<div class="venda-item-row" data-row="' + idx + '">' +
-        '<select class="v-produto">' + '<option value="">Selecione...</option>' + options + '</select>' +
+        '<div class="combo-wrap">' +
+          '<input type="hidden" class="v-produto-id" value="' + (item ? item.produtoId : "") + '">' +
+          '<input type="text" class="v-produto-busca" placeholder="Digite para buscar produto..." autocomplete="off" value="' + (produtoAtual ? esc(produtoAtual.nome) : "") + '">' +
+          '<div class="combo-dropdown hidden"></div>' +
+        '</div>' +
         '<input class="v-qtd" type="number" min="1" value="' + (item ? item.qtd : 1) + '">' +
         '<input class="v-preco" type="number" min="0" step="0.01" value="' + (item ? item.precoUnit : 0) + '">' +
         '<button type="button" class="btn btn-icon btn-danger v-remove" title="Remover">&times;</button>' +
@@ -677,40 +721,84 @@
     );
   }
 
+  function vendaPagamentoOptionsHtml(selecionada){
+    return FORMAS_PAGAMENTO_VENDA.map(function(m){
+      return '<option value="' + esc(m) + '"' + (m === selecionada ? " selected" : "") + '>' + esc(m) + '</option>';
+    }).join("");
+  }
+
+  function vendedorOptionsHtml(selecionado){
+    return '<option value="">Selecione...</option>' + state.vendedores.map(function(nome){
+      return '<option value="' + esc(nome) + '"' + (nome === selecionado ? " selected" : "") + '>' + esc(nome) + '</option>';
+    }).join("");
+  }
+
+  function pagamentoSplitRowHtml(linha, idx){
+    linha = linha || { forma: "Dinheiro", valor: 0 };
+    return (
+      '<div class="pgto-split-row" data-split-row="' + idx + '">' +
+        '<select class="ps-forma">' + vendaPagamentoOptionsHtml(linha.forma) + '</select>' +
+        '<input class="ps-valor" type="number" min="0" step="0.01" value="' + (linha.valor || 0) + '">' +
+        '<button type="button" class="btn btn-icon btn-danger ps-remove" title="Remover">&times;</button>' +
+      '</div>'
+    );
+  }
+
   function vendaForm(venda){
-    var clienteOptions = '<option value="">Consumidor final</option>' + state.clientes.map(function(c){
+    var clienteOptions = '<option value="">Consumidor</option>' + state.clientes.map(function(c){
       var sel = venda && venda.clienteId === c.id ? "selected" : "";
       return '<option value="' + c.id + '" ' + sel + '>' + esc(c.nome) + '</option>';
     }).join("");
     var vendaDataStr = venda ? venda.data : todayISO();
-    var vendaPagamento = venda ? venda.pagamento : "Dinheiro";
+    var linhasExistentes = venda ? linhasPagamento(venda) : [{ forma: "Dinheiro", valor: 0 }];
+    var dividirPagamento = venda ? linhasExistentes.length > 1 : false;
+    var vendaPagamentoUnico = venda ? normalizarFormaPagamento(venda.pagamento || "Dinheiro") : "Dinheiro";
     var vendaRows = venda
       ? venda.itens.map(function(i, idx){
           return vendaFormRow({ produtoId: i.produtoId, nome: i.nome, qtd: i.qtd, precoUnit: i.precoUnit }, idx);
         }).join("")
       : vendaFormRow(null, 0);
+    var splitRows = (dividirPagamento ? linhasExistentes : [null]).map(function(l, idx){
+      return pagamentoSplitRowHtml(l, idx);
+    }).join("");
     var btnSaveText = venda ? "Atualizar venda" : "Registrar venda";
-    var pagarSel = vendaPagamento === "A prazo" ? "selected" : "";
-    var dinheiroSel = vendaPagamento === "Dinheiro" ? "selected" : "";
-    var creditoSel = vendaPagamento === "Cartão de crédito" ? "selected" : "";
-    var debitoSel = vendaPagamento === "Cartão de débito" ? "selected" : "";
-    var pixSel = vendaPagamento === "Pix" ? "selected" : "";
+    var desconto = venda ? (venda.desconto || 0) : 0;
+
     return (
       '<div class="field-row">' +
         '<div class="field"><label>Cliente</label><select id="fCliente">' + clienteOptions + '</select></div>' +
-        '<div class="field"><label>Forma de pagamento</label><select id="fPagamento">' +
-          '<option value="Dinheiro" ' + dinheiroSel + '>Dinheiro</option>' +
-          '<option value="Cartão de crédito" ' + creditoSel + '>Cartão de crédito</option>' +
-          '<option value="Cartão de débito" ' + debitoSel + '>Cartão de débito</option>' +
-          '<option value="Pix" ' + pixSel + '>Pix</option>' +
-          '<option value="A prazo" ' + pagarSel + '>A prazo</option>' +
-        '</select></div>' +
+        '<div class="field"><label>Vendedor</label><div style="display:flex;gap:0.4rem;">' +
+          '<select id="fVendedor" style="flex:1;">' + vendedorOptionsHtml(venda ? venda.vendedor : null) + '</select>' +
+          '<button type="button" class="btn btn-ghost btn-sm" id="btnNovoVendedorInline" title="Adicionar vendedor">+</button>' +
+        '</div></div>' +
       '</div>' +
       '<div class="field"><label>Data</label><input id="fData" type="date" value="' + vendaDataStr + '"></div>' +
       '<div class="venda-items" id="vendaItems">' +
         '<div id="vendaRows">' + vendaRows + '</div>' +
         '<button type="button" class="btn btn-ghost btn-sm" id="btnAddItem" style="margin-top:0.4rem;">+ Adicionar item</button>' +
-        '<div class="venda-total"><span>Total</span><span id="vendaTotalValor">R$ 0,00</span></div>' +
+      '</div>' +
+      '<div class="field-row">' +
+        '<div class="field">' +
+          '<label>Desconto (R$)</label>' +
+          '<div style="display:flex;gap:0.4rem;">' +
+            '<input id="fDesconto" type="number" min="0" step="0.01" value="' + desconto + '" disabled style="flex:1;">' +
+            '<button type="button" class="btn btn-ghost btn-sm" id="btnLiberarDesconto" title="Somente o vendedor pode liberar">Liberar</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="field">' +
+          '<label class="checkbox-inline"><input type="checkbox" id="fDividirPagamento" ' + (dividirPagamento ? "checked" : "") + '> Dividir entre formas de pagamento</label>' +
+          '<select id="fPagamento" class="' + (dividirPagamento ? "hidden" : "") + '">' + vendaPagamentoOptionsHtml(vendaPagamentoUnico) + '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div class="pgto-split ' + (dividirPagamento ? "" : "hidden") + '" id="pgtoSplit">' +
+        '<div id="pgtoSplitRows">' + splitRows + '</div>' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="btnAddSplit" style="margin-top:0.4rem;">+ Adicionar forma</button>' +
+        '<div class="pgto-split-status" id="pgtoSplitStatus"></div>' +
+      '</div>' +
+      '<div class="venda-total-box">' +
+        '<div class="venda-total-linha"><span>Subtotal</span><span id="vendaSubtotalValor">R$ 0,00</span></div>' +
+        '<div class="venda-total-linha ' + (desconto > 0 ? "" : "hidden") + '" id="vendaDescontoLinha"><span>Desconto</span><span id="vendaDescontoValor">- R$ 0,00</span></div>' +
+        '<div class="venda-total-linha venda-total-final"><span>Total</span><span id="vendaTotalValor">R$ 0,00</span></div>' +
       '</div>' +
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">' + btnSaveText + '</button></div>'
     );
@@ -725,24 +813,98 @@
     var title = isEdit ? "Editar venda" : "Nova venda";
     openModal(title, vendaForm(venda), function(body){
       var rowsEl = body.querySelector("#vendaRows");
-      var rowCount = 1;
+      var rowCount = rowsEl.querySelectorAll(".venda-item-row").length;
+      var splitRowsEl = body.querySelector("#pgtoSplitRows");
+      var splitRowCount = splitRowsEl.querySelectorAll(".pgto-split-row").length;
 
-      function recalcTotal(){
+      function subtotalAtual(){
         var total = 0;
         rowsEl.querySelectorAll(".venda-item-row").forEach(function(row){
           var qtd = parseFloat(row.querySelector(".v-qtd").value) || 0;
           var preco = parseFloat(row.querySelector(".v-preco").value) || 0;
           total += qtd * preco;
         });
+        return total;
+      }
+
+      function totalAtual(){
+        var subtotal = subtotalAtual();
+        var desconto = Math.min(parseFloat(body.querySelector("#fDesconto").value) || 0, subtotal);
+        return Math.max(0, subtotal - desconto);
+      }
+
+      function recalcSplitStatus(){
+        if(!body.querySelector("#fDividirPagamento").checked) return;
+        var total = totalAtual();
+        var alocado = 0;
+        splitRowsEl.querySelectorAll(".pgto-split-row").forEach(function(row){
+          alocado += parseFloat(row.querySelector(".ps-valor").value) || 0;
+        });
+        var diff = Math.round((total - alocado) * 100) / 100;
+        var statusEl = body.querySelector("#pgtoSplitStatus");
+        if(Math.abs(diff) < 0.01){
+          statusEl.innerHTML = '<span class="pgto-split-ok">✓ Pagamento totalmente alocado</span>';
+        } else if(diff > 0){
+          statusEl.innerHTML = '<span class="pgto-split-falta">Falta alocar ' + brl(diff) + '</span>';
+        } else {
+          statusEl.innerHTML = '<span class="pgto-split-falta">' + brl(-diff) + ' a mais que o total</span>';
+        }
+      }
+
+      function recalcTotal(){
+        var subtotal = subtotalAtual();
+        var descontoInput = parseFloat(body.querySelector("#fDesconto").value) || 0;
+        var desconto = Math.min(descontoInput, subtotal);
+        var total = Math.max(0, subtotal - desconto);
+        body.querySelector("#vendaSubtotalValor").textContent = brl(subtotal);
+        body.querySelector("#vendaDescontoValor").textContent = "- " + brl(desconto);
+        body.querySelector("#vendaDescontoLinha").classList.toggle("hidden", desconto <= 0);
         body.querySelector("#vendaTotalValor").textContent = brl(total);
+        recalcSplitStatus();
+      }
+
+      function fecharDropdown(dd){ dd.classList.add("hidden"); dd.innerHTML = ""; }
+
+      function abrirDropdown(row, termo){
+        var dd = row.querySelector(".combo-dropdown");
+        var termoLower = (termo || "").toLowerCase();
+        var matches = state.produtos.filter(function(p){
+          return !termoLower || p.nome.toLowerCase().indexOf(termoLower) !== -1;
+        }).slice(0, 30);
+        dd.innerHTML = matches.length === 0
+          ? '<div class="combo-empty">Nenhum produto encontrado</div>'
+          : matches.map(function(p){
+              return '<div class="combo-item" data-produto-id="' + p.id + '">' + esc(p.nome) +
+                ' <span class="combo-item-sub">(' + p.estoque + ' em estoque · ' + brl(p.preco) + ')</span></div>';
+            }).join("");
+        dd.classList.remove("hidden");
       }
 
       function bindRow(row){
-        row.querySelector(".v-produto").addEventListener("change", function(){
-          var prod = state.produtos.find(function(p){ return p.id === row.querySelector(".v-produto").value; });
-          if(prod) row.querySelector(".v-preco").value = prod.preco;
+        var buscaInput = row.querySelector(".v-produto-busca");
+        var idInput = row.querySelector(".v-produto-id");
+        var dd = row.querySelector(".combo-dropdown");
+
+        buscaInput.addEventListener("focus", function(){ abrirDropdown(row, buscaInput.value); });
+        buscaInput.addEventListener("input", function(){
+          idInput.value = "";
+          abrirDropdown(row, buscaInput.value);
+        });
+        buscaInput.addEventListener("blur", function(){
+          setTimeout(function(){ fecharDropdown(dd); }, 150);
+        });
+        dd.addEventListener("mousedown", function(e){
+          var item = e.target.closest(".combo-item[data-produto-id]");
+          if(!item) return;
+          var prod = state.produtos.find(function(p){ return p.id === item.dataset.produtoId; });
+          if(!prod) return;
+          idInput.value = prod.id;
+          buscaInput.value = prod.nome;
+          row.querySelector(".v-preco").value = prod.preco;
+          fecharDropdown(dd);
           recalcTotal();
         });
+
         row.querySelector(".v-qtd").addEventListener("input", recalcTotal);
         row.querySelector(".v-preco").addEventListener("input", recalcTotal);
         row.querySelector(".v-remove").addEventListener("click", function(){
@@ -752,7 +914,7 @@
           }
         });
       }
-      bindRow(rowsEl.querySelector(".venda-item-row"));
+      rowsEl.querySelectorAll(".venda-item-row").forEach(bindRow);
 
       body.querySelector("#btnAddItem").addEventListener("click", function(){
         var div = document.createElement("div");
@@ -762,12 +924,68 @@
         bindRow(row);
       });
 
+      body.querySelector("#btnNovoVendedorInline").addEventListener("click", function(){
+        var nome = prompt("Nome do novo vendedor:");
+        if(!nome) return;
+        nome = nome.trim();
+        if(!nome) return;
+        if(state.vendedores.indexOf(nome) === -1){
+          state.vendedores.push(nome);
+          saveData();
+        }
+        body.querySelector("#fVendedor").innerHTML = vendedorOptionsHtml(nome);
+      });
+
+      body.querySelector("#btnLiberarDesconto").addEventListener("click", function(){
+        var senha = prompt("Senha do vendedor para liberar o desconto:");
+        if(senha === null) return;
+        if(senha === SELLER_DISCOUNT_CODE){
+          var input = body.querySelector("#fDesconto");
+          input.disabled = false;
+          input.focus();
+          toast("Desconto liberado");
+        } else {
+          toast("Senha incorreta");
+        }
+      });
+      body.querySelector("#fDesconto").addEventListener("input", recalcTotal);
+
+      function bindSplitRow(row){
+        row.querySelector(".ps-valor").addEventListener("input", recalcSplitStatus);
+        row.querySelector(".ps-forma").addEventListener("change", recalcSplitStatus);
+        row.querySelector(".ps-remove").addEventListener("click", function(){
+          if(splitRowsEl.querySelectorAll(".pgto-split-row").length > 1){
+            row.remove();
+            recalcSplitStatus();
+          }
+        });
+      }
+      splitRowsEl.querySelectorAll(".pgto-split-row").forEach(bindSplitRow);
+
+      body.querySelector("#btnAddSplit").addEventListener("click", function(){
+        var div = document.createElement("div");
+        div.innerHTML = pagamentoSplitRowHtml(null, splitRowCount++);
+        var row = div.firstElementChild;
+        splitRowsEl.appendChild(row);
+        bindSplitRow(row);
+        recalcSplitStatus();
+      });
+
+      body.querySelector("#fDividirPagamento").addEventListener("change", function(e){
+        var dividir = e.target.checked;
+        body.querySelector("#pgtoSplit").classList.toggle("hidden", !dividir);
+        body.querySelector("#fPagamento").classList.toggle("hidden", dividir);
+        recalcSplitStatus();
+      });
+
+      recalcTotal();
+
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
       body.querySelector("#btnSave").addEventListener("click", function(){
         var itens = [];
         var valid = true;
         rowsEl.querySelectorAll(".venda-item-row").forEach(function(row){
-          var produtoId = row.querySelector(".v-produto").value;
+          var produtoId = row.querySelector(".v-produto-id").value;
           var qtd = parseInt(row.querySelector(".v-qtd").value, 10) || 0;
           var preco = parseFloat(row.querySelector(".v-preco").value) || 0;
           if(!produtoId || qtd <= 0){ valid = false; return; }
@@ -776,22 +994,73 @@
           if(qtd > prod.estoque){ valid = false; toast("Estoque insuficiente para " + prod.nome); return; }
           itens.push({ produtoId: produtoId, nome: prod.nome, qtd: qtd, precoUnit: preco });
         });
-        if(!valid || itens.length === 0){ toast("Verifique os itens da venda"); return; }
+        if(!valid || itens.length === 0){ toast("Verifique os itens da venda (selecione o produto pela busca)"); return; }
 
-        var total = itens.reduce(function(sum, i){ return sum + i.qtd * i.precoUnit; }, 0);
-        var pagamento = body.querySelector("#fPagamento").value;
+        var subtotal = itens.reduce(function(sum, i){ return sum + i.qtd * i.precoUnit; }, 0);
+        var desconto = Math.min(parseFloat(body.querySelector("#fDesconto").value) || 0, subtotal);
+        var total = Math.max(0, subtotal - desconto);
         var dataEscolhida = body.querySelector("#fData").value || todayISO();
         var clienteId = body.querySelector("#fCliente").value || null;
+        var vendedor = body.querySelector("#fVendedor").value || null;
+
+        var pagamentos;
+        if(body.querySelector("#fDividirPagamento").checked){
+          pagamentos = [];
+          var somaAlocada = 0;
+          splitRowsEl.querySelectorAll(".pgto-split-row").forEach(function(row){
+            var forma = row.querySelector(".ps-forma").value;
+            var valorLinha = parseFloat(row.querySelector(".ps-valor").value) || 0;
+            if(valorLinha > 0){
+              pagamentos.push({ forma: forma, valor: valorLinha });
+              somaAlocada += valorLinha;
+            }
+          });
+          if(pagamentos.length === 0 || Math.abs(somaAlocada - total) >= 0.01){
+            toast("A soma das formas de pagamento precisa ser igual ao total (" + brl(total) + ")");
+            return;
+          }
+        } else {
+          pagamentos = [{ forma: body.querySelector("#fPagamento").value, valor: total }];
+        }
+        var pagamentoLabel = pagamentos.length === 1 ? pagamentos[0].forma : "Dividido";
+        var valorFuturo = pagamentos.filter(function(p){ return p.forma === "Pagamento futuro"; }).reduce(function(s,p){ return s + p.valor; }, 0);
+
+        function sincronizarReceberDaVenda(vendaRef){
+          var conta = state.contas.find(function(c){ return c.vendaId === vendaRef.id; });
+          if(valorFuturo > 0){
+            if(conta){
+              conta.descricao = "Venda - " + clienteNome(vendaRef.clienteId);
+              conta.valor = valorFuturo;
+              conta.vencimento = vendaRef.data;
+              if(conta.status !== "pago") conta.status = "pendente";
+            } else {
+              state.contas.push({
+                id: uid(),
+                descricao: "Venda - " + clienteNome(vendaRef.clienteId),
+                tipo: "receber",
+                vencimento: vendaRef.data,
+                valor: valorFuturo,
+                status: "pendente",
+                vendaId: vendaRef.id
+              });
+            }
+          } else if(conta){
+            state.contas = state.contas.filter(function(c){ return c.id !== conta.id; });
+          }
+        }
 
         function finalizarVenda(){
           if(isEdit){
             venda.clienteId = clienteId;
-            venda.pagamento = pagamento;
+            venda.vendedor = vendedor;
+            venda.desconto = desconto;
+            venda.pagamento = pagamentoLabel;
+            venda.pagamentos = pagamentos;
             venda.data = dataEscolhida;
 
             venda.itens.forEach(function(i){
               var prod = state.produtos.find(function(p){ return p.id === i.produtoId; });
-              prod.estoque = Math.max(0, prod.estoque + i.qtd);
+              if(prod) prod.estoque = Math.max(0, prod.estoque + i.qtd);
             });
 
             venda.itens = itens;
@@ -799,17 +1068,10 @@
 
             itens.forEach(function(i){
               var prod = state.produtos.find(function(p){ return p.id === i.produtoId; });
-              prod.estoque = Math.max(0, prod.estoque - i.qtd);
+              if(prod) prod.estoque = Math.max(0, prod.estoque - i.qtd);
             });
 
-            var conta = state.contas.find(function(c){ return c.vendaId === venda.id; });
-            if(conta){
-              conta.descricao = "Venda - " + clienteNome(venda.clienteId);
-              conta.valor = total;
-              conta.vencimento = venda.data;
-              conta.status = pagamento === "A prazo" ? "pendente" : "pago";
-            }
-
+            sincronizarReceberDaVenda(venda);
             toast("Venda atualizada");
           } else {
             var novaVenda = {
@@ -817,9 +1079,12 @@
               data: dataEscolhida,
               criadoEm: new Date().toISOString(),
               clienteId: clienteId,
+              vendedor: vendedor,
               itens: itens,
               total: total,
-              pagamento: pagamento
+              desconto: desconto,
+              pagamento: pagamentoLabel,
+              pagamentos: pagamentos
             };
 
             itens.forEach(function(i){
@@ -828,16 +1093,7 @@
             });
 
             state.vendas.push(novaVenda);
-
-            state.contas.push({
-              id: uid(),
-              descricao: "Venda - " + clienteNome(novaVenda.clienteId),
-              tipo: "receber",
-              vencimento: novaVenda.data,
-              valor: total,
-              status: pagamento === "A prazo" ? "pendente" : "pago",
-              vendaId: novaVenda.id
-            });
+            sincronizarReceberDaVenda(novaVenda);
 
             toast("Venda registrada");
           }
@@ -858,6 +1114,136 @@
 
   document.getElementById("btnNovaVenda").addEventListener("click", function(){ openVendaModal(); });
   document.getElementById("buscaVendas").addEventListener("input", function(e){ renderVendas(e.target.value); });
+
+  // ---------- Filtro de período (calendário: clique no dia inicial, depois no final) ----------
+  (function(){
+    var popover = document.getElementById("periodoPopover");
+    var btn = document.getElementById("btnPeriodoVendas");
+    var label = document.getElementById("btnPeriodoVendasLabel");
+    var mesExibido = new Date();
+    var selInicio = null;
+    var selFim = null;
+
+    function fmtCurto(iso){
+      var p = iso.split("-");
+      return p[2] + "/" + p[1];
+    }
+
+    function atualizarLabel(){
+      label.textContent = (vendasRangeInicio && vendasRangeFim)
+        ? (fmtCurto(vendasRangeInicio) + " – " + fmtCurto(vendasRangeFim))
+        : "Período";
+    }
+
+    function isoDe(ano, mes, dia){
+      return ano + "-" + String(mes + 1).padStart(2, "0") + "-" + String(dia).padStart(2, "0");
+    }
+
+    function renderCalendario(){
+      var ano = mesExibido.getFullYear();
+      var mes = mesExibido.getMonth();
+      var primeiroDiaSemana = new Date(ano, mes, 1).getDay();
+      var totalDias = new Date(ano, mes + 1, 0).getDate();
+      var nomesMes = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+      var dias = "";
+      for(var i = 0; i < primeiroDiaSemana; i++){
+        dias += '<div class="cal-day cal-day-empty"></div>';
+      }
+      for(var d = 1; d <= totalDias; d++){
+        var iso = isoDe(ano, mes, d);
+        var classes = "cal-day";
+        if(selInicio && iso === selInicio) classes += " cal-day-start";
+        if(selFim && iso === selFim) classes += " cal-day-end";
+        if(selInicio && selFim && iso > selInicio && iso < selFim) classes += " cal-day-range";
+        if(iso === todayISO()) classes += " cal-day-today";
+        dias += '<div class="' + classes + '" data-cal-dia="' + iso + '">' + d + '</div>';
+      }
+
+      popover.innerHTML =
+        '<div class="cal-header">' +
+          '<button type="button" class="cal-nav" id="calPrev">&lsaquo;</button>' +
+          '<span>' + nomesMes[mes] + " " + ano + '</span>' +
+          '<button type="button" class="cal-nav" id="calNext">&rsaquo;</button>' +
+        '</div>' +
+        '<div class="cal-weekdays"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>' +
+        '<div class="cal-grid">' + dias + '</div>' +
+        '<div class="cal-footer">' +
+          '<div class="cal-selecao">' +
+            (selInicio ? ("De <strong>" + fmtDate(selInicio) + "</strong>") : "Selecione o dia inicial") +
+            (selFim ? (" até <strong>" + fmtDate(selFim) + "</strong>") : "") +
+          '</div>' +
+          '<div class="cal-acoes">' +
+            '<button type="button" class="btn btn-ghost btn-sm" id="calLimpar">Limpar</button>' +
+            '<button type="button" class="btn btn-primary btn-sm" id="calAplicar">Aplicar</button>' +
+          '</div>' +
+        '</div>';
+
+      popover.querySelector("#calPrev").addEventListener("click", function(){
+        mesExibido.setMonth(mesExibido.getMonth() - 1);
+        renderCalendario();
+      });
+      popover.querySelector("#calNext").addEventListener("click", function(){
+        mesExibido.setMonth(mesExibido.getMonth() + 1);
+        renderCalendario();
+      });
+      popover.querySelectorAll("[data-cal-dia]").forEach(function(el){
+        el.addEventListener("click", function(){
+          var iso = el.dataset.calDia;
+          if(!selInicio || (selInicio && selFim)){
+            selInicio = iso;
+            selFim = null;
+          } else if(iso < selInicio){
+            selFim = selInicio;
+            selInicio = iso;
+          } else {
+            selFim = iso;
+          }
+          renderCalendario();
+        });
+      });
+      popover.querySelector("#calLimpar").addEventListener("click", function(){
+        selInicio = null;
+        selFim = null;
+        vendasRangeInicio = null;
+        vendasRangeFim = null;
+        atualizarLabel();
+        renderVendas(document.getElementById("buscaVendas").value);
+        popover.classList.add("hidden");
+      });
+      popover.querySelector("#calAplicar").addEventListener("click", function(){
+        vendasRangeInicio = selInicio;
+        vendasRangeFim = selFim || selInicio;
+        atualizarLabel();
+        renderVendas(document.getElementById("buscaVendas").value);
+        popover.classList.add("hidden");
+      });
+    }
+
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      var abrindo = popover.classList.contains("hidden");
+      popover.classList.toggle("hidden");
+      if(abrindo){
+        selInicio = vendasRangeInicio;
+        selFim = vendasRangeFim;
+        if(selInicio) mesExibido = new Date(selInicio + "T00:00:00");
+        renderCalendario();
+      }
+    });
+
+    // Qualquer clique dentro do popover não deve "vazar" para o listener de
+    // fechamento por clique-fora (o innerHTML é substituído a cada render do
+    // calendário, o que desconecta o elemento original da árvore do documento).
+    popover.addEventListener("click", function(e){ e.stopPropagation(); });
+
+    document.addEventListener("click", function(e){
+      if(!popover.classList.contains("hidden") && !popover.contains(e.target) && e.target !== btn && !btn.contains(e.target)){
+        popover.classList.add("hidden");
+      }
+    });
+  })();
+
   document.getElementById("tblVendas").addEventListener("click", function(e){
     var editId = e.target.dataset.editVenda;
     var delId = e.target.dataset.delVenda;
@@ -922,7 +1308,6 @@
       }).join("");
     }
 
-    var pagarPendente = sum(state.contas.filter(function(c){ return c.tipo === "pagar" && c.status === "pendente"; }));
     var despesasMes = state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento.slice(0,7) === hoje.slice(0,7); });
     var despesasTotalMes = sum(despesasMes);
     var vendedMes = state.vendas.filter(function(v){ return v.data.slice(0,7) === hoje.slice(0,7); });
@@ -930,7 +1315,6 @@
 
     document.getElementById("kpiTotal").textContent = kpiVisiveis ? brl(totalMes) : "R$ ••••";
     document.getElementById("kpiDespesasTotal").textContent = kpiVisiveis ? brl(despesasTotalMes) : "R$ ••••";
-    document.getElementById("finPagarPendente").textContent = brl(pagarPendente);
 
     [document.getElementById("eyeTotal"), document.getElementById("eyeDespesasTotal")].forEach(function(eyeBtn){
       if(eyeBtn){
@@ -946,6 +1330,31 @@
     document.getElementById("finVendasHojePagamentos").innerHTML = pagamentosChipsHtml(vendasHoje);
 
     renderFechamentos();
+    renderComissoes();
+  }
+
+  var FORMAS_FECHAMENTO = ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix", "Pagamento futuro"];
+
+  function somarPorForma(vendas){
+    var totais = {};
+    FORMAS_FECHAMENTO.forEach(function(m){ totais[m] = 0; });
+    vendas.forEach(function(v){
+      linhasPagamento(v).forEach(function(l){
+        if(totais.hasOwnProperty(l.forma)) totais[l.forma] += l.valor;
+      });
+    });
+    return totais;
+  }
+
+  function fechamentoDetalhesHtml(pagamentos, extra){
+    return (
+      '<div class="fechamento-detalhes-row"><span>Dinheiro</span><span>' + brl(pagamentos["Dinheiro"] || 0) + '</span></div>' +
+      '<div class="fechamento-detalhes-row"><span>Cartão de Crédito</span><span>' + brl(pagamentos["Cartão de crédito"] || 0) + '</span></div>' +
+      '<div class="fechamento-detalhes-row"><span>Cartão de Débito</span><span>' + brl(pagamentos["Cartão de débito"] || 0) + '</span></div>' +
+      '<div class="fechamento-detalhes-row"><span>Pix</span><span>' + brl(pagamentos["Pix"] || 0) + '</span></div>' +
+      '<div class="fechamento-detalhes-row"><span>Pagamento Futuro</span><span>' + brl(pagamentos["Pagamento futuro"] || 0) + '</span></div>' +
+      (extra || "")
+    );
   }
 
   function renderFechamentos(){
@@ -955,11 +1364,7 @@
     var vendasHoje = state.vendas.filter(function(v){ return v.data === hoje; });
     var despesasHoje = state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento === hoje; });
 
-    var pagamentosHoje = {};
-    ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix", "A prazo"].forEach(function(m){
-      pagamentosHoje[m] = vendasHoje.filter(function(v){ return v.pagamento === m; }).reduce(function(s,v){ return s + v.total; }, 0);
-    });
-
+    var pagamentosHoje = somarPorForma(vendasHoje);
     var totalVendasHoje = vendasHoje.reduce(function(s,v){ return s + v.total; }, 0);
     var totalDespesasHoje = despesasHoje.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0);
     var caixaEsperado = (pagamentosHoje["Dinheiro"] || 0) + (pagamentosHoje["Pix"] || 0) - totalDespesasHoje;
@@ -976,38 +1381,32 @@
         '</div>' +
       '</div>' +
       '<div class="fechamento-detalhes">' +
-        '<div class="fechamento-detalhes-row">' +
-          '<span>Dinheiro</span><span>' + brl(pagamentosHoje["Dinheiro"] || 0) + '</span>' +
-        '</div>' +
-        '<div class="fechamento-detalhes-row">' +
-          '<span>Cartão de Crédito</span><span>' + brl(pagamentosHoje["Cartão de crédito"] || 0) + '</span>' +
-        '</div>' +
-        '<div class="fechamento-detalhes-row">' +
-          '<span>Cartão de Débito</span><span>' + brl(pagamentosHoje["Cartão de débito"] || 0) + '</span>' +
-        '</div>' +
-        '<div class="fechamento-detalhes-row">' +
-          '<span>Pix</span><span>' + brl(pagamentosHoje["Pix"] || 0) + '</span>' +
-        '</div>' +
-        '<div class="fechamento-detalhes-row">' +
-          '<span>A Prazo</span><span>' + brl(pagamentosHoje["A prazo"] || 0) + '</span>' +
-        '</div>' +
-        '<div style="margin-top:0.8rem;padding-top:0.8rem;border-top:2px solid var(--line);">' +
-          '<div class="fechamento-detalhes-row" style="font-weight:700;color:var(--ok);">' +
-            '<span>Caixa Esperado</span><span>' + brl(caixaEsperado) + '</span>' +
-          '</div>' +
-        '</div>' +
+        fechamentoDetalhesHtml(pagamentosHoje,
+          '<div style="margin-top:0.8rem;padding-top:0.8rem;border-top:2px solid var(--line);">' +
+            '<div class="fechamento-detalhes-row" style="font-weight:700;color:var(--ok);">' +
+              '<span>Caixa Esperado</span><span>' + brl(caixaEsperado) + '</span>' +
+            '</div>' +
+          '</div>'
+        ) +
       '</div>';
 
     document.getElementById("fechamentoDiaConteudo").innerHTML = fechamentoDiaHtml;
 
+    var fechamentoMesEl = document.getElementById("fechamentoMesConteudo");
+    if(!fechamentoMesVisivel){
+      fechamentoMesEl.innerHTML =
+        '<div class="chart-locked">' +
+          LOCK_SVG +
+          '<span>Área protegida — clique no cadeado para ver o fechamento do mês</span>' +
+          '<button type="button" class="btn btn-primary btn-sm" id="btnDesbloquearFechamentoMes">Desbloquear</button>' +
+        '</div>';
+      return;
+    }
+
     var vendasMes = state.vendas.filter(function(v){ return v.data.slice(0,7) === ym; });
     var despesasMes = state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento.slice(0,7) === ym; });
 
-    var pagamentosMes = {};
-    ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix", "A prazo"].forEach(function(m){
-      pagamentosMes[m] = vendasMes.filter(function(v){ return v.pagamento === m; }).reduce(function(s,v){ return s + v.total; }, 0);
-    });
-
+    var pagamentosMes = somarPorForma(vendasMes);
     var totalVendasMes = vendasMes.reduce(function(s,v){ return s + v.total; }, 0);
     var totalDespesasMes = despesasMes.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0);
     var lucroMes = totalVendasMes - totalDespesasMes;
@@ -1024,30 +1423,82 @@
         '</div>' +
       '</div>' +
       '<div class="fechamento-detalhes">' +
-        '<div class="fechamento-label" style="margin-bottom:0.6rem;">Vendas por tipo de pagamento</div>' +
-        '<div class="fechamento-detalhes-row">' +
-          '<span>Dinheiro</span><span>' + brl(pagamentosMes["Dinheiro"] || 0) + '</span>' +
-        '</div>' +
-        '<div class="fechamento-detalhes-row">' +
-          '<span>Cartão de Crédito</span><span>' + brl(pagamentosMes["Cartão de crédito"] || 0) + '</span>' +
-        '</div>' +
-        '<div class="fechamento-detalhes-row">' +
-          '<span>Cartão de Débito</span><span>' + brl(pagamentosMes["Cartão de débito"] || 0) + '</span>' +
-        '</div>' +
-        '<div class="fechamento-detalhes-row">' +
-          '<span>Pix</span><span>' + brl(pagamentosMes["Pix"] || 0) + '</span>' +
-        '</div>' +
-        '<div class="fechamento-detalhes-row">' +
-          '<span>A Prazo</span><span>' + brl(pagamentosMes["A prazo"] || 0) + '</span>' +
-        '</div>' +
-        '<div style="margin-top:0.8rem;padding-top:0.8rem;border-top:2px solid var(--line);">' +
-          '<div class="fechamento-detalhes-row" style="font-weight:700;color:var(--ok);">' +
-            '<span>Lucro do Mês</span><span>' + brl(lucroMes) + '</span>' +
-          '</div>' +
-        '</div>' +
+        '<div class="fechamento-label" style="margin-bottom:0.6rem;">Vendas por forma de pagamento</div>' +
+        fechamentoDetalhesHtml(pagamentosMes,
+          '<div style="margin-top:0.8rem;padding-top:0.8rem;border-top:2px solid var(--line);">' +
+            '<div class="fechamento-detalhes-row" style="font-weight:700;color:var(--ok);">' +
+              '<span>Lucro do Mês</span><span>' + brl(lucroMes) + '</span>' +
+            '</div>' +
+          '</div>'
+        ) +
       '</div>';
 
-    document.getElementById("fechamentoMesConteudo").innerHTML = fechamentoMesHtml;
+    fechamentoMesEl.innerHTML = fechamentoMesHtml;
+  }
+
+  var fechamentoMesVisivel = false;
+  document.getElementById("fechamentoMesConteudo").addEventListener("click", function(e){
+    if(e.target.closest("#btnDesbloquearFechamentoMes")){
+      pedirSenhaAdmin(function(){
+        fechamentoMesVisivel = true;
+        renderFechamentos();
+      });
+    }
+  });
+
+  // ================= COMISSÕES =================
+  var comissoesFiltro = "mes";
+
+  function renderComissoes(){
+    var vendasPeriodo = filtrarVendasPorPeriodo(comissoesFiltro, todayISO());
+    var porVendedor = {};
+    vendasPeriodo.forEach(function(v){
+      if(!v.vendedor) return;
+      porVendedor[v.vendedor] = (porVendedor[v.vendedor] || 0) + v.total;
+    });
+    var pct = Number(state.comissaoPercentual) || 0;
+    var nomes = Object.keys(porVendedor).sort();
+
+    function chip(valor, label){
+      return '<button type="button" class="btn btn-sm ' + (comissoesFiltro === valor ? "btn-primary" : "btn-ghost") + '" data-cm-filtro="' + valor + '">' + label + '</button>';
+    }
+
+    var linhasHtml = nomes.length === 0
+      ? '<tr class="empty-row"><td colspan="3">Nenhuma venda com vendedor identificado neste período.</td></tr>'
+      : nomes.map(function(nome){
+          var totalVendido = porVendedor[nome];
+          var comissao = totalVendido * (pct / 100);
+          return '<tr>' +
+            '<td class="cell-strong">' + esc(nome) + '</td>' +
+            '<td>' + brl(totalVendido) + '</td>' +
+            '<td class="cell-strong" style="color:var(--ok);">' + brl(comissao) + '</td>' +
+          '</tr>';
+        }).join("");
+
+    document.getElementById("comissoesConteudo").innerHTML =
+      '<div class="vd-filtros" style="margin-bottom:0.9rem;">' +
+        chip("hoje", "Hoje") + chip("mes", "Este mês") + chip("ano", "Este ano") +
+      '</div>' +
+      '<div class="field" style="max-width:220px;margin-bottom:1.2rem;">' +
+        '<label>% de comissão sobre vendas</label>' +
+        '<input type="number" min="0" step="0.1" id="fComissaoPct" value="' + pct + '">' +
+      '</div>' +
+      '<div class="table-wrap">' +
+        '<table><thead><tr><th>Vendedor</th><th>Vendas no período</th><th>Comissão</th></tr></thead>' +
+        '<tbody>' + linhasHtml + '</tbody></table>' +
+      '</div>';
+
+    document.getElementById("comissoesConteudo").querySelectorAll("[data-cm-filtro]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        comissoesFiltro = btn.dataset.cmFiltro;
+        renderComissoes();
+      });
+    });
+    document.getElementById("fComissaoPct").addEventListener("change", function(e){
+      state.comissaoPercentual = Math.max(0, parseFloat(e.target.value) || 0);
+      saveData();
+      renderComissoes();
+    });
   }
 
   function sum(arr){ return arr.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0); }
@@ -1066,35 +1517,24 @@
 
   function contaForm(conta){
     conta = conta || {};
-    var tipoSel1 = (conta.tipo === "pagar") ? "selected" : "";
-    var tipoSel2 = (conta.tipo === "receber") ? "selected" : "";
-    var statusSel1 = (conta.status === "pendente") ? "selected" : "";
-    var statusSel2 = (conta.status === "pago") ? "selected" : "";
     var btnSaveText = conta.id ? "Atualizar" : "Salvar";
     return (
       '<div class="field"><label>Descrição</label><input id="fDescricao" value="' + esc(conta.descricao||"") + '" placeholder="Ex: Aluguel, fornecedor..."></div>' +
       '<div class="field-row">' +
-        '<div class="field"><label>Tipo</label><select id="fTipo"><option value="pagar" ' + tipoSel1 + '>A pagar</option><option value="receber" ' + tipoSel2 + '>A receber</option></select></div>' +
         '<div class="field"><label>Valor</label><input id="fValor" type="number" min="0" step="0.01" value="' + (conta.valor||"") + '"></div>' +
-      '</div>' +
-      '<div class="field-row">' +
-        '<div class="field"><label>Natureza</label><div style="display:flex;gap:0.4rem;">' +
-          '<select id="fNatureza" style="flex:1;">' + naturezaOptionsHtml(conta.natureza) + '</select>' +
-          '<button type="button" class="btn btn-ghost btn-sm" id="btnNovaNatureza" title="Adicionar nova natureza">+</button>' +
-        '</div></div>' +
         '<div class="field"><label>Forma de pagamento</label><select id="fFormaPagamento">' + formaPagamentoOptionsHtml(conta.formaPagamento) + '</select></div>' +
       '</div>' +
-      '<div class="field-row">' +
-        '<div class="field"><label>Vencimento</label><input id="fVencimento" type="date" value="' + (conta.vencimento||todayISO()) + '"></div>' +
-        '<div class="field"><label>Status</label><select id="fStatus"><option value="pendente" ' + statusSel1 + '>Pendente</option><option value="pago" ' + statusSel2 + '>Pago</option></select></div>' +
-      '</div>' +
+      '<div class="field"><label>Natureza</label><div style="display:flex;gap:0.4rem;">' +
+        '<select id="fNatureza" style="flex:1;">' + naturezaOptionsHtml(conta.natureza) + '</select>' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="btnNovaNatureza" title="Adicionar nova natureza">+</button>' +
+      '</div></div>' +
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">' + btnSaveText + '</button></div>'
     );
   }
 
   function openContaModal(conta){
     var isEdit = !!conta;
-    var title = isEdit ? "Editar conta" : "Nova conta";
+    var title = isEdit ? "Editar despesa" : "Adicionar despesa";
     openModal(title, contaForm(conta), function(body){
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
 
@@ -1117,25 +1557,23 @@
         if(!descricao || valor <= 0){ toast("Preencha descrição e valor"); return; }
         if(isEdit){
           conta.descricao = descricao;
-          conta.tipo = body.querySelector("#fTipo").value;
           conta.natureza = body.querySelector("#fNatureza").value || null;
           conta.formaPagamento = body.querySelector("#fFormaPagamento").value || null;
           conta.valor = valor;
-          conta.vencimento = body.querySelector("#fVencimento").value || todayISO();
-          conta.status = body.querySelector("#fStatus").value;
-          toast("Conta atualizada");
+          toast("Despesa atualizada");
         } else {
+          // Despesa = saída de caixa imediata: já sai lançada como paga, sem vencimento futuro.
           state.contas.push({
             id: uid(),
             descricao: descricao,
-            tipo: body.querySelector("#fTipo").value,
+            tipo: "pagar",
             natureza: body.querySelector("#fNatureza").value || null,
             formaPagamento: body.querySelector("#fFormaPagamento").value || null,
             valor: valor,
-            vencimento: body.querySelector("#fVencimento").value || todayISO(),
-            status: body.querySelector("#fStatus").value
+            vencimento: todayISO(),
+            status: "pago"
           });
-          toast("Conta lançada");
+          toast("Despesa lançada");
         }
         saveData();
         closeModal();
@@ -1232,6 +1670,7 @@
   var kpiVisiveis = false;
   var graficosVisiveis = false;
   var ADMIN_CODE = "1518";
+  var SELLER_DISCOUNT_CODE = "3268";
   var EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
   var EYE_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c7 0 10.5 7 10.5 7a13.2 13.2 0 0 1-3.1 4.1M6.5 6.6C3.4 8.5 1.5 12 1.5 12S5 19 12 19a10.6 10.6 0 0 0 4.2-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
   var LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
@@ -1262,10 +1701,16 @@
     renderDashboard();
     renderFinanceiro();
   }
-  document.getElementById("eyeVendas").addEventListener("click", toggleKpiVisiveis);
-  document.getElementById("eyeDespesas").addEventListener("click", toggleKpiVisiveis);
-  document.getElementById("eyeTotal").addEventListener("click", toggleKpiVisiveis);
-  document.getElementById("eyeDespesasTotal").addEventListener("click", toggleKpiVisiveis);
+  function bindEyeToggle(id){
+    document.getElementById(id).addEventListener("click", function(e){
+      e.stopPropagation();
+      toggleKpiVisiveis();
+    });
+  }
+  bindEyeToggle("eyeVendas");
+  bindEyeToggle("eyeDespesas");
+  bindEyeToggle("eyeTotal");
+  bindEyeToggle("eyeDespesasTotal");
 
   function toggleGraficosVisiveis(){
     if(graficosVisiveis){
