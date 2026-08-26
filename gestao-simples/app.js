@@ -542,9 +542,11 @@
 
   // ================= DASHBOARD =================
   // Estado só de sessão (não é salvo): a cada carregamento/atualização da
-  // página os valores voltam a ficar ocultos por padrão, exigindo a senha
-  // de novo para revelar.
-  var valoresVisiveis = false;
+  // página os valores voltam a ficar ocultos por padrão. Os KPIs (Vendas,
+  // Despesas, Total da loja) só precisam de um clique; os gráficos exigem
+  // a senha de admin para revelar.
+  var kpiVisiveis = false;
+  var graficosVisiveis = false;
   var ADMIN_CODE = "1518";
   var EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
   var EYE_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c7 0 10.5 7 10.5 7a13.2 13.2 0 0 1-3.1 4.1M6.5 6.6C3.4 8.5 1.5 12 1.5 12S5 19 12 19a10.6 10.6 0 0 0 4.2-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
@@ -571,20 +573,27 @@
     });
   }
 
-  function toggleValoresVisiveis(){
-    if(valoresVisiveis){
-      valoresVisiveis = false;
-      renderDashboard();
+  function toggleKpiVisiveis(){
+    kpiVisiveis = !kpiVisiveis;
+    renderDashboard();
+  }
+  document.getElementById("eyeVendas").addEventListener("click", toggleKpiVisiveis);
+  document.getElementById("eyeDespesas").addEventListener("click", toggleKpiVisiveis);
+  document.getElementById("eyeTotalLoja").addEventListener("click", toggleKpiVisiveis);
+
+  function toggleGraficosVisiveis(){
+    if(graficosVisiveis){
+      graficosVisiveis = false;
+      renderGraficos();
     } else {
       pedirSenhaAdmin(function(){
-        valoresVisiveis = true;
-        renderDashboard();
+        graficosVisiveis = true;
+        renderGraficos();
       });
     }
   }
-  document.getElementById("eyeVendas").addEventListener("click", toggleValoresVisiveis);
-  document.getElementById("eyeDespesas").addEventListener("click", toggleValoresVisiveis);
-  document.getElementById("eyeTotalLoja").addEventListener("click", toggleValoresVisiveis);
+  document.getElementById("eyeGraficoVD").addEventListener("click", toggleGraficosVisiveis);
+  document.getElementById("eyeGraficoCresc").addEventListener("click", toggleGraficosVisiveis);
 
   // ---------- Gráficos mensais (SVG, sem dependências) ----------
   var MESES_ABREV = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
@@ -676,7 +685,14 @@
   }
 
   function renderGraficos(){
-    if(!valoresVisiveis){
+    [document.getElementById("eyeGraficoVD"), document.getElementById("eyeGraficoCresc")].forEach(function(btn){
+      btn.innerHTML = graficosVisiveis ? EYE_OPEN_SVG : EYE_OFF_SVG;
+      btn.setAttribute("aria-pressed", graficosVisiveis ? "true" : "false");
+      btn.setAttribute("aria-label", graficosVisiveis ? "Ocultar gráfico" : "Mostrar gráfico");
+      btn.title = graficosVisiveis ? "Ocultar gráfico" : "Mostrar gráfico";
+    });
+
+    if(!graficosVisiveis){
       var lockedHtml = '<div class="chart-locked">' + LOCK_SVG + '<span>Protegido — clique no olho para ver</span></div>';
       document.getElementById("chartVendasDespesas").innerHTML = lockedHtml;
       document.getElementById("chartCrescimento").innerHTML = lockedHtml;
@@ -703,26 +719,26 @@
     var ym = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0");
     var vendasMes = state.vendas.filter(function(v){ return v.data.slice(0,7) === ym; });
     var totalVendas = sum(vendasMes.map(function(v){ return { valor: v.total }; }));
-    document.getElementById("kpiVendasMes").textContent = valoresVisiveis ? brl(totalVendas) : "R$ ••••";
+    document.getElementById("kpiVendasMes").textContent = kpiVisiveis ? brl(totalVendas) : "R$ ••••";
     document.getElementById("kpiVendasQtd").textContent = vendasMes.length + " vendas";
 
     var pagarPendente = state.contas.filter(function(c){ return c.tipo === "pagar" && c.status === "pendente"; });
-    document.getElementById("kpiPagar").textContent = valoresVisiveis ? brl(sum(pagarPendente)) : "R$ ••••";
+    document.getElementById("kpiPagar").textContent = kpiVisiveis ? brl(sum(pagarPendente)) : "R$ ••••";
     document.getElementById("kpiPagarQtd").textContent = pagarPendente.length + " pendentes";
 
     var totalVendasGeral = sum(state.vendas.map(function(v){ return { valor: v.total }; }));
     var totalDespesasGeral = sum(state.contas.filter(function(c){ return c.tipo === "pagar"; }));
     var totalLoja = totalVendasGeral - totalDespesasGeral;
     var totalLojaEl = document.getElementById("kpiTotalLoja");
-    totalLojaEl.textContent = valoresVisiveis ? brl(totalLoja) : "R$ ••••";
+    totalLojaEl.textContent = kpiVisiveis ? brl(totalLoja) : "R$ ••••";
     totalLojaEl.classList.remove("kpi-value-green", "kpi-value-red");
-    if(valoresVisiveis) totalLojaEl.classList.add(totalLoja >= 0 ? "kpi-value-green" : "kpi-value-red");
+    if(kpiVisiveis) totalLojaEl.classList.add(totalLoja >= 0 ? "kpi-value-green" : "kpi-value-red");
 
     [document.getElementById("eyeVendas"), document.getElementById("eyeDespesas"), document.getElementById("eyeTotalLoja")].forEach(function(btn){
-      btn.innerHTML = valoresVisiveis ? EYE_OPEN_SVG : EYE_OFF_SVG;
-      btn.setAttribute("aria-pressed", valoresVisiveis ? "true" : "false");
-      btn.setAttribute("aria-label", valoresVisiveis ? "Ocultar valor" : "Mostrar valor");
-      btn.title = valoresVisiveis ? "Ocultar valor" : "Mostrar valor";
+      btn.innerHTML = kpiVisiveis ? EYE_OPEN_SVG : EYE_OFF_SVG;
+      btn.setAttribute("aria-pressed", kpiVisiveis ? "true" : "false");
+      btn.setAttribute("aria-label", kpiVisiveis ? "Ocultar valor" : "Mostrar valor");
+      btn.title = kpiVisiveis ? "Ocultar valor" : "Mostrar valor";
     });
 
     var ultimasVendas = state.vendas.slice().sort(function(a,b){ return b.data.localeCompare(a.data); }).slice(0,6);

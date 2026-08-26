@@ -92,15 +92,21 @@
           <div class="panel chart-panel">
             <div class="panel-head">
               <h2>Vendas x Despesas</h2>
-              <div class="chart-legend">
-                <span><i style="background:var(--ok)"></i>Vendas</span>
-                <span><i style="background:var(--danger)"></i>Despesas</span>
+              <div style="display:flex;align-items:center;gap:0.9rem;">
+                <div class="chart-legend">
+                  <span><i style="background:var(--ok)"></i>Vendas</span>
+                  <span><i style="background:var(--danger)"></i>Despesas</span>
+                </div>
+                <button class="kpi-eye" id="eyeGraficoVD" type="button" aria-label="Mostrar gráfico" title="Mostrar gráfico" aria-pressed="false"></button>
               </div>
             </div>
             <div class="chart-holder" id="chartVendasDespesas"></div>
           </div>
           <div class="panel chart-panel">
-            <div class="panel-head"><h2>Crescimento</h2></div>
+            <div class="panel-head">
+              <h2>Crescimento</h2>
+              <button class="kpi-eye" id="eyeGraficoCresc" type="button" aria-label="Mostrar gráfico" title="Mostrar gráfico" aria-pressed="false"></button>
+            </div>
             <div class="chart-holder" id="chartCrescimento"></div>
           </div>
         </div>
