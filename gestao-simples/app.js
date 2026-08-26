@@ -1227,7 +1227,7 @@
   // ================= DASHBOARD =================
   // Estado só de sessão (não é salvo): a cada carregamento/atualização da
   // página os valores voltam a ficar ocultos por padrão. Os KPIs (Vendas,
-  // Despesas, Total da loja) só precisam de um clique; os gráficos exigem
+  // Despesas) só precisam de um clique; os gráficos exigem
   // a senha de admin para revelar.
   var kpiVisiveis = false;
   var graficosVisiveis = false;
