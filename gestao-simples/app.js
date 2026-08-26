@@ -474,6 +474,15 @@
     document.getElementById("finReceberPendente").textContent = brl(receberPendente);
     document.getElementById("finPagarPendente").textContent = brl(pagarPendente);
     document.getElementById("kpiSaldoPrevisto").textContent = brl((pagoReceber - pagoPagar) + (receberPendente - pagarPendente));
+
+    var hoje = todayISO();
+    var pendentes = state.contas.filter(function(c){ return c.status === "pendente"; });
+    var vencidas = sum(pendentes.filter(function(c){ return c.vencimento < hoje; }));
+    var vencemHoje = sum(pendentes.filter(function(c){ return c.vencimento === hoje; }));
+    var aVencer = sum(pendentes.filter(function(c){ return c.vencimento > hoje; }));
+    document.getElementById("finVencidas").textContent = brl(vencidas);
+    document.getElementById("finVencemHoje").textContent = brl(vencemHoje);
+    document.getElementById("finAVencer").textContent = brl(aVencer);
   }
 
   function sum(arr){ return arr.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0); }
@@ -607,15 +616,42 @@
       '</svg>';
   }
 
+  function buildGroupedBarChartSVG(labels, seriesA, seriesB, colorA, colorB){
+    var w = 300, h = 150;
+    var padL = 6, padR = 6, padTop = 10, padBottom = 20;
+    var chartW = w - padL - padR;
+    var chartH = h - padTop - padBottom;
+    var n = labels.length;
+    var slot = chartW / n;
+    var barW = Math.min(13, slot * 0.28);
+    var gap = 2;
+    var maxVal = Math.max.apply(null, seriesA.concat(seriesB).map(Math.abs).concat([1]));
+    var baselineY = padTop + chartH;
+
+    var bars = "", labelsSvg = "";
+    for(var i = 0; i < n; i++){
+      var cx = padL + slot * i + slot / 2;
+      var hA = Math.max(1, (seriesA[i] / maxVal) * chartH);
+      var hB = Math.max(1, (seriesB[i] / maxVal) * chartH);
+      var xA = cx - gap/2 - barW;
+      var xB = cx + gap/2;
+      bars += '<rect class="chart-bar" x="' + xA.toFixed(1) + '" y="' + (baselineY - hA).toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + hA.toFixed(1) + '" rx="2" fill="' + colorA + '"><title>' + esc(labels[i]) + " — Vendas: " + brl(seriesA[i]) + '</title></rect>';
+      bars += '<rect class="chart-bar" x="' + xB.toFixed(1) + '" y="' + (baselineY - hB).toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + hB.toFixed(1) + '" rx="2" fill="' + colorB + '"><title>' + esc(labels[i]) + " — Despesas: " + brl(seriesB[i]) + '</title></rect>';
+      labelsSvg += '<text class="chart-axis-label" x="' + cx.toFixed(1) + '" y="' + (h - 5) + '" text-anchor="middle">' + esc(labels[i]) + '</text>';
+    }
+
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="xMidYMid meet">' + bars + labelsSvg + '</svg>';
+  }
+
   function renderGraficos(){
     var dados = totaisMensais();
     var labels = dados.map(function(d){ return d.label; });
 
-    document.getElementById("chartVendas").innerHTML = buildTrendChartSVG(
-      labels, dados.map(function(d){ return d.vendas; }), { color: "var(--ok)" }
-    );
-    document.getElementById("chartDespesas").innerHTML = buildTrendChartSVG(
-      labels, dados.map(function(d){ return d.despesas; }), { color: "var(--danger)" }
+    document.getElementById("chartVendasDespesas").innerHTML = buildGroupedBarChartSVG(
+      labels,
+      dados.map(function(d){ return d.vendas; }),
+      dados.map(function(d){ return d.despesas; }),
+      "var(--ok)", "var(--danger)"
     );
     document.getElementById("chartCrescimento").innerHTML = buildTrendChartSVG(
       labels, dados.map(function(d){ return d.cresc; }),
@@ -631,10 +667,7 @@
     document.getElementById("kpiVendasMes").textContent = valoresVisiveis ? brl(totalVendas) : "R$ ••••";
     document.getElementById("kpiVendasQtd").textContent = vendasMes.length + " vendas";
 
-    var receberPendente = state.contas.filter(function(c){ return c.tipo === "receber" && c.status === "pendente"; });
     var pagarPendente = state.contas.filter(function(c){ return c.tipo === "pagar" && c.status === "pendente"; });
-    document.getElementById("kpiReceber").textContent = brl(sum(receberPendente));
-    document.getElementById("kpiReceberQtd").textContent = receberPendente.length + " pendentes";
     document.getElementById("kpiPagar").textContent = valoresVisiveis ? brl(sum(pagarPendente)) : "R$ ••••";
     document.getElementById("kpiPagarQtd").textContent = pagarPendente.length + " pendentes";
 

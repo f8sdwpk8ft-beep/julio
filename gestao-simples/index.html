@@ -78,21 +78,18 @@
             </div>
             <div class="kpi-sub danger" id="kpiPagarQtd">0 pendentes</div>
           </div>
-          <div class="kpi-card">
-            <div class="kpi-label">A receber</div>
-            <div class="kpi-value" id="kpiReceber">R$ 0,00</div>
-            <div class="kpi-sub warn" id="kpiReceberQtd">0 pendentes</div>
-          </div>
         </div>
 
-        <div class="chart-grid">
+        <div class="chart-grid chart-grid-2">
           <div class="panel chart-panel">
-            <div class="panel-head"><h2>Vendas mensais</h2></div>
-            <div class="chart-holder" id="chartVendas"></div>
-          </div>
-          <div class="panel chart-panel">
-            <div class="panel-head"><h2>Despesas mensais</h2></div>
-            <div class="chart-holder" id="chartDespesas"></div>
+            <div class="panel-head">
+              <h2>Vendas x Despesas</h2>
+              <div class="chart-legend">
+                <span><i style="background:var(--ok)"></i>Vendas</span>
+                <span><i style="background:var(--danger)"></i>Despesas</span>
+              </div>
+            </div>
+            <div class="chart-holder" id="chartVendasDespesas"></div>
           </div>
           <div class="panel chart-panel">
             <div class="panel-head"><h2>Crescimento</h2></div>
@@ -191,6 +188,20 @@
           <div class="kpi-card">
             <div class="kpi-label">A pagar (pendente)</div>
             <div class="kpi-value" id="finPagarPendente">R$ 0,00</div>
+          </div>
+        </div>
+        <div class="urgency-row">
+          <div class="urgency-chip urgency-danger">
+            <span class="urgency-label">Vencidas</span>
+            <span class="urgency-value" id="finVencidas">R$ 0,00</span>
+          </div>
+          <div class="urgency-chip urgency-warn">
+            <span class="urgency-label">Vencem hoje</span>
+            <span class="urgency-value" id="finVencemHoje">R$ 0,00</span>
+          </div>
+          <div class="urgency-chip urgency-muted">
+            <span class="urgency-label">A vencer</span>
+            <span class="urgency-value" id="finAVencer">R$ 0,00</span>
           </div>
         </div>
         <div class="panel">

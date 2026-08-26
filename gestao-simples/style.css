@@ -139,6 +139,8 @@ button, input, select{font-family:inherit;}
 }
 @media (max-width:960px){.chart-grid{grid-template-columns:1fr 1fr;}}
 @media (max-width:640px){.chart-grid{grid-template-columns:1fr;}}
+.chart-grid-2{grid-template-columns:1fr 1fr;}
+@media (max-width:720px){.chart-grid-2{grid-template-columns:1fr;}}
 .chart-panel{margin-bottom:0;}
 .chart-holder{width:100%;}
 .chart-holder svg{width:100%;height:auto;display:block;overflow:visible;}
@@ -149,6 +151,21 @@ button, input, select{font-family:inherit;}
 .chart-trend-line{fill:none;stroke:var(--ink-dim);stroke-width:1;stroke-dasharray:2.5,2.5;opacity:0.55;}
 .chart-trend-dot{fill:var(--ink);}
 .chart-baseline{stroke:var(--line);stroke-width:1;}
+.chart-legend{display:flex;gap:1rem;font-size:0.76rem;color:var(--ink-dim);font-weight:600;}
+.chart-legend span{display:inline-flex;align-items:center;gap:0.35rem;}
+.chart-legend i{width:9px;height:9px;border-radius:2px;display:inline-block;}
+
+/* ---------- Faixa de urgência (Financeiro) ---------- */
+.urgency-row{display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1.25rem;}
+.urgency-chip{
+  flex:1;min-width:140px;border-radius:12px;padding:0.75rem 1rem;
+  display:flex;flex-direction:column;gap:0.2rem;
+}
+.urgency-label{font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;opacity:0.85;}
+.urgency-value{font-size:1.2rem;font-weight:800;font-variant-numeric:tabular-nums;}
+.urgency-danger{background:var(--danger-tint);color:var(--danger);}
+.urgency-warn{background:var(--warn-tint);color:var(--warn);}
+.urgency-muted{background:var(--surface-2, #fafbfd);color:var(--ink-dim);}
 
 /* ---------- Buttons ---------- */
 .btn{
