@@ -298,6 +298,124 @@
     return c ? c.nome : "Consumidor final";
   }
 
+  // ---------- Detalhes de vendas (por período) ----------
+  function diaAnterior(iso){
+    var partes = iso.split("-").map(Number);
+    var d = new Date(partes[0], partes[1] - 1, partes[2]);
+    d.setDate(d.getDate() - 1);
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+
+  function filtrarVendasPorPeriodo(filtro, dataCustom){
+    var hoje = todayISO();
+    if(filtro === "data") return state.vendas.filter(function(v){ return v.data === (dataCustom || hoje); });
+    if(filtro === "ontem") return state.vendas.filter(function(v){ return v.data === diaAnterior(hoje); });
+    if(filtro === "mes") return state.vendas.filter(function(v){ return v.data.slice(0,7) === hoje.slice(0,7); });
+    if(filtro === "ano") return state.vendas.filter(function(v){ return v.data.slice(0,4) === hoje.slice(0,4); });
+    return state.vendas.filter(function(v){ return v.data === hoje; });
+  }
+
+  function vendasDetalheHtml(filtro, dataCustom){
+    function chip(valor, label){
+      return '<button type="button" class="btn btn-sm ' + (filtro === valor ? "btn-primary" : "btn-ghost") + '" data-vd-filtro="' + valor + '">' + label + '</button>';
+    }
+    return (
+      '<div class="vd-filtros">' +
+        chip("hoje", "Hoje") + chip("ontem", "Ontem") + chip("mes", "Este mês") + chip("ano", "Este ano") +
+      '</div>' +
+      '<div class="field"><label>Ou escolha um dia</label><input type="date" id="vdData" value="' + (dataCustom || todayISO()) + '"></div>' +
+      '<div class="vd-lista-wrap table-wrap">' +
+        '<table><thead><tr><th>Data</th><th>Horário</th><th>Cliente</th><th>Total</th></tr></thead><tbody id="vdTbody"></tbody></table>' +
+      '</div>' +
+      '<div class="venda-total"><span>Total do período</span><span id="vdTotalValor">R$ 0,00</span></div>'
+    );
+  }
+
+  function horaDaVenda(v){
+    if(!v.criadoEm) return "-";
+    var d = new Date(v.criadoEm);
+    if(isNaN(d.getTime())) return "-";
+    return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+  }
+
+  function abrirDetalhesVendas(){
+    var estadoFiltro = { filtro: "hoje", data: todayISO() };
+
+    openModal("Vendas", vendasDetalheHtml(estadoFiltro.filtro, estadoFiltro.data), function(body){
+      function renderLista(){
+        var lista = filtrarVendasPorPeriodo(estadoFiltro.filtro, estadoFiltro.data).sort(function(a,b){
+          return (b.criadoEm || b.data).localeCompare(a.criadoEm || a.data);
+        });
+        var tbody = body.querySelector("#vdTbody");
+        tbody.innerHTML = lista.length === 0
+          ? '<tr class="empty-row"><td colspan="4">Nenhuma venda neste período.</td></tr>'
+          : lista.map(function(v){
+              return '<tr class="vd-row" data-vd-venda="' + v.id + '">' +
+                '<td>' + fmtDate(v.data) + '</td>' +
+                '<td>' + horaDaVenda(v) + '</td>' +
+                '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + '</td>' +
+                '<td class="cell-strong">' + brl(v.total) + '</td>' +
+              '</tr>';
+            }).join("");
+        body.querySelector("#vdTotalValor").textContent = brl(lista.reduce(function(s,v){ return s + v.total; }, 0));
+      }
+
+      function marcarChipAtivo(){
+        body.querySelectorAll("[data-vd-filtro]").forEach(function(btn){
+          btn.classList.toggle("btn-primary", btn.dataset.vdFiltro === estadoFiltro.filtro);
+          btn.classList.toggle("btn-ghost", btn.dataset.vdFiltro !== estadoFiltro.filtro);
+        });
+      }
+
+      body.querySelectorAll("[data-vd-filtro]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          estadoFiltro.filtro = btn.dataset.vdFiltro;
+          marcarChipAtivo();
+          renderLista();
+        });
+      });
+
+      body.querySelector("#vdData").addEventListener("change", function(e){
+        estadoFiltro.filtro = "data";
+        estadoFiltro.data = e.target.value || todayISO();
+        marcarChipAtivo();
+        renderLista();
+      });
+
+      body.querySelector("#vdTbody").addEventListener("click", function(e){
+        var row = e.target.closest("[data-vd-venda]");
+        if(row) abrirDetalheVenda(row.dataset.vdVenda);
+      });
+
+      renderLista();
+    });
+  }
+
+  function abrirDetalheVenda(vendaId){
+    var v = state.vendas.find(function(x){ return x.id === vendaId; });
+    if(!v) return;
+    var itensHtml = v.itens.map(function(i){
+      return '<div>' + i.qtd + 'x ' + esc(i.nome) + ' — ' + brl(i.precoUnit) + '</div>';
+    }).join("");
+    openModal("Detalhes da venda", (
+      '<div class="venda-detalhe-linha"><span>Data</span><span>' + fmtDate(v.data) + '</span></div>' +
+      '<div class="venda-detalhe-linha"><span>Horário</span><span>' + horaDaVenda(v) + '</span></div>' +
+      '<div class="venda-detalhe-linha"><span>Cliente</span><span>' + esc(clienteNome(v.clienteId)) + '</span></div>' +
+      '<div class="venda-detalhe-linha"><span>Pagamento</span><span>' + esc(v.pagamento) + '</span></div>' +
+      '<div class="venda-detalhe-itens">' + itensHtml + '</div>' +
+      '<div class="venda-total"><span>Total</span><span>' + brl(v.total) + '</span></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnVoltarLista">Voltar</button><button class="btn btn-primary" id="btnFecharDetalhe">Fechar</button></div>'
+    ), function(body){
+      body.querySelector("#btnFecharDetalhe").addEventListener("click", closeModal);
+      body.querySelector("#btnVoltarLista").addEventListener("click", abrirDetalhesVendas);
+    });
+  }
+
+  document.getElementById("kpiCardVendas").addEventListener("click", function(e){
+    if(e.target.closest(".kpi-eye")) return;
+    abrirDetalhesVendas();
+  });
+
   function vendaFormRow(item, idx){
     var options = state.produtos.map(function(p){
       var sel = item && item.produtoId === p.id ? "selected" : "";
@@ -396,36 +514,48 @@
 
         var total = itens.reduce(function(sum, i){ return sum + i.qtd * i.precoUnit; }, 0);
         var pagamento = body.querySelector("#fPagamento").value;
-        var venda = {
-          id: uid(),
-          data: body.querySelector("#fData").value || todayISO(),
-          clienteId: body.querySelector("#fCliente").value || null,
-          itens: itens,
-          total: total,
-          pagamento: pagamento
-        };
+        var dataEscolhida = body.querySelector("#fData").value || todayISO();
+        var clienteId = body.querySelector("#fCliente").value || null;
 
-        itens.forEach(function(i){
-          var prod = state.produtos.find(function(p){ return p.id === i.produtoId; });
-          prod.estoque = Math.max(0, prod.estoque - i.qtd);
-        });
+        function finalizarVenda(){
+          var venda = {
+            id: uid(),
+            data: dataEscolhida,
+            criadoEm: new Date().toISOString(),
+            clienteId: clienteId,
+            itens: itens,
+            total: total,
+            pagamento: pagamento
+          };
 
-        state.vendas.push(venda);
+          itens.forEach(function(i){
+            var prod = state.produtos.find(function(p){ return p.id === i.produtoId; });
+            prod.estoque = Math.max(0, prod.estoque - i.qtd);
+          });
 
-        state.contas.push({
-          id: uid(),
-          descricao: "Venda - " + clienteNome(venda.clienteId),
-          tipo: "receber",
-          vencimento: venda.data,
-          valor: total,
-          status: pagamento === "À vista" ? "pago" : "pendente",
-          vendaId: venda.id
-        });
+          state.vendas.push(venda);
 
-        saveData();
-        closeModal();
-        renderAll();
-        toast("Venda registrada");
+          state.contas.push({
+            id: uid(),
+            descricao: "Venda - " + clienteNome(venda.clienteId),
+            tipo: "receber",
+            vencimento: venda.data,
+            valor: total,
+            status: pagamento === "À vista" ? "pago" : "pendente",
+            vendaId: venda.id
+          });
+
+          saveData();
+          closeModal();
+          renderAll();
+          toast("Venda registrada");
+        }
+
+        if(dataEscolhida !== todayISO()){
+          pedirSenhaAdmin(finalizarVenda);
+        } else {
+          finalizarVenda();
+        }
       });
     });
   }
