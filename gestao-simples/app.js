@@ -545,6 +545,84 @@
   document.getElementById("eyeVendas").addEventListener("click", toggleValoresVisiveis);
   document.getElementById("eyeDespesas").addEventListener("click", toggleValoresVisiveis);
 
+  // ---------- Gráficos mensais (SVG, sem dependências) ----------
+  var MESES_ABREV = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+
+  function ultimosMeses(n){
+    var out = [];
+    var now = new Date();
+    for(var i = n - 1; i >= 0; i--){
+      var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      out.push({
+        ym: d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"),
+        label: MESES_ABREV[d.getMonth()] + "/" + String(d.getFullYear()).slice(2)
+      });
+    }
+    return out;
+  }
+
+  function totaisMensais(){
+    return ultimosMeses(6).map(function(m){
+      var vendasMes = sum(state.vendas.filter(function(v){ return v.data.slice(0,7) === m.ym; }).map(function(v){ return { valor: v.total }; }));
+      var despesasMes = sum(state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento.slice(0,7) === m.ym; }));
+      return { label: m.label, vendas: vendasMes, despesas: despesasMes, cresc: vendasMes - despesasMes };
+    });
+  }
+
+  function buildTrendChartSVG(labels, valores, opts){
+    opts = opts || {};
+    var w = 300, h = 150;
+    var padL = 6, padR = 6, padTop = 10, padBottom = 20;
+    var chartW = w - padL - padR;
+    var chartH = h - padTop - padBottom;
+    var n = labels.length;
+    var slot = chartW / n;
+    var barW = Math.min(28, slot * 0.5);
+    var maxVal = Math.max.apply(null, valores.map(function(v){ return Math.abs(v); }).concat([1]));
+    var bipolar = !!opts.bipolar;
+    var baselineY = bipolar ? (padTop + chartH / 2) : (padTop + chartH);
+    var half = bipolar ? chartH / 2 : chartH;
+
+    var bars = "", points = [], labelsSvg = "";
+    for(var i = 0; i < n; i++){
+      var v = valores[i];
+      var cx = padL + slot * i + slot / 2;
+      var y = baselineY - (v / maxVal) * half;
+      var barTop = Math.min(y, baselineY);
+      var barH = Math.max(1, Math.abs(y - baselineY));
+      var color = opts.colorFn ? opts.colorFn(v) : opts.color;
+      bars += '<rect class="chart-bar" x="' + (cx - barW/2).toFixed(1) + '" y="' + barTop.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + barH.toFixed(1) + '" rx="2" fill="' + color + '"><title>' + esc(labels[i]) + ": " + brl(v) + '</title></rect>';
+      points.push([cx, y]);
+      labelsSvg += '<text class="chart-axis-label" x="' + cx.toFixed(1) + '" y="' + (h - 5) + '" text-anchor="middle">' + esc(labels[i]) + '</text>';
+    }
+
+    var linePath = points.map(function(p, idx){ return (idx === 0 ? "M" : "L") + p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ");
+    var dots = points.map(function(p){ return '<circle class="chart-trend-dot" cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="2"></circle>'; }).join("");
+    var baseline = bipolar ? ('<line class="chart-baseline" x1="' + padL + '" y1="' + baselineY.toFixed(1) + '" x2="' + (w - padR) + '" y2="' + baselineY.toFixed(1) + '"></line>') : "";
+
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="xMidYMid meet">' +
+      baseline + bars +
+      '<path class="chart-trend-line" d="' + linePath + '"></path>' +
+      dots + labelsSvg +
+      '</svg>';
+  }
+
+  function renderGraficos(){
+    var dados = totaisMensais();
+    var labels = dados.map(function(d){ return d.label; });
+
+    document.getElementById("chartVendas").innerHTML = buildTrendChartSVG(
+      labels, dados.map(function(d){ return d.vendas; }), { color: "var(--ok)" }
+    );
+    document.getElementById("chartDespesas").innerHTML = buildTrendChartSVG(
+      labels, dados.map(function(d){ return d.despesas; }), { color: "var(--danger)" }
+    );
+    document.getElementById("chartCrescimento").innerHTML = buildTrendChartSVG(
+      labels, dados.map(function(d){ return d.cresc; }),
+      { bipolar: true, colorFn: function(v){ return v >= 0 ? "var(--ok)" : "var(--danger)"; } }
+    );
+  }
+
   function renderDashboard(){
     var now = new Date();
     var ym = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0");
@@ -574,6 +652,8 @@
       : ultimasVendas.map(function(v){
           return '<tr><td>' + fmtDate(v.data) + '</td><td>' + esc(clienteNome(v.clienteId)) + '</td><td>' + v.itens.length + ' item(ns)</td><td class="cell-strong">' + brl(v.total) + '</td></tr>';
         }).join("");
+
+    renderGraficos();
   }
 
   // ================= RENDER ALL =================

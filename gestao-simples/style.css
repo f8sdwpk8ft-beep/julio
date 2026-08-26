@@ -132,6 +132,24 @@ button, input, select{font-family:inherit;}
 .panel-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;}
 @media (max-width:900px){.panel-grid{grid-template-columns:1fr;}}
 
+/* ---------- Gráficos do dashboard ---------- */
+.chart-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;
+  margin-bottom:1.25rem;
+}
+@media (max-width:960px){.chart-grid{grid-template-columns:1fr 1fr;}}
+@media (max-width:640px){.chart-grid{grid-template-columns:1fr;}}
+.chart-panel{margin-bottom:0;}
+.chart-holder{width:100%;}
+.chart-holder svg{width:100%;height:auto;display:block;overflow:visible;}
+.chart-bar{transition:opacity .15s ease;}
+.chart-bar:hover{opacity:0.8;}
+.chart-value-label{font-size:7px;font-weight:700;font-family:'Inter',system-ui,sans-serif;}
+.chart-axis-label{font-size:7px;fill:var(--ink-faint);font-family:'Inter',system-ui,sans-serif;}
+.chart-trend-line{fill:none;stroke:var(--ink-dim);stroke-width:1;stroke-dasharray:2.5,2.5;opacity:0.55;}
+.chart-trend-dot{fill:var(--ink);}
+.chart-baseline{stroke:var(--line);stroke-width:1;}
+
 /* ---------- Buttons ---------- */
 .btn{
   display:inline-flex;align-items:center;gap:0.4rem;
