@@ -437,6 +437,65 @@
     abrirDetalhesVendas();
   });
 
+  function abrirTotalVendas(){
+    var estadoFiltro = { filtro: "mes", data: todayISO() };
+
+    openModal("Total de vendas", vendasDetalheHtml(estadoFiltro.filtro, estadoFiltro.data), function(body){
+      function renderLista(){
+        var lista = filtrarVendasPorPeriodo(estadoFiltro.filtro, estadoFiltro.data).sort(function(a,b){
+          return (b.criadoEm || b.data).localeCompare(a.criadoEm || a.data);
+        });
+        var tbody = body.querySelector("#vdTbody");
+        tbody.innerHTML = lista.length === 0
+          ? '<tr class="empty-row"><td colspan="4">Nenhuma venda neste período.</td></tr>'
+          : lista.map(function(v){
+              return '<tr class="vd-row" data-vd-venda="' + v.id + '">' +
+                '<td>' + fmtDate(v.data) + '</td>' +
+                '<td>' + horaDaVenda(v) + '</td>' +
+                '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + '</td>' +
+                '<td class="cell-strong">' + brl(v.total) + '</td>' +
+              '</tr>';
+            }).join("");
+        body.querySelector("#vdTotalValor").textContent = brl(lista.reduce(function(s,v){ return s + v.total; }, 0));
+        body.querySelector("#vdPagamentos").innerHTML = pagamentosChipsHtml(lista);
+      }
+
+      function marcarChipAtivo(){
+        body.querySelectorAll("[data-vd-filtro]").forEach(function(btn){
+          btn.classList.toggle("btn-primary", btn.dataset.vdFiltro === estadoFiltro.filtro);
+          btn.classList.toggle("btn-ghost", btn.dataset.vdFiltro !== estadoFiltro.filtro);
+        });
+      }
+
+      body.querySelectorAll("[data-vd-filtro]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          estadoFiltro.filtro = btn.dataset.vdFiltro;
+          marcarChipAtivo();
+          renderLista();
+        });
+      });
+
+      body.querySelector("#vdData").addEventListener("change", function(e){
+        estadoFiltro.filtro = "data";
+        estadoFiltro.data = e.target.value || todayISO();
+        marcarChipAtivo();
+        renderLista();
+      });
+
+      body.querySelector("#vdTbody").addEventListener("click", function(e){
+        var row = e.target.closest("[data-vd-venda]");
+        if(row) abrirDetalheVenda(row.dataset.vdVenda);
+      });
+
+      renderLista();
+    }, { large: true });
+  }
+
+  document.getElementById("kpiCardTotal").addEventListener("click", function(e){
+    if(e.target.closest(".kpi-eye")) return;
+    abrirTotalVendas();
+  });
+
   // ---------- Detalhes de despesas (por período) ----------
   function filtrarDespesasPorPeriodo(filtro, dataCustom){
     var despesas = state.contas.filter(function(c){ return c.tipo === "pagar"; });
@@ -749,23 +808,23 @@
       }).join("");
     }
 
+    var hoje = todayISO();
     var receberPendente = sum(state.contas.filter(function(c){ return c.tipo === "receber" && c.status === "pendente"; }));
     var pagarPendente = sum(state.contas.filter(function(c){ return c.tipo === "pagar" && c.status === "pendente"; }));
-    var pagoReceber = sum(state.contas.filter(function(c){ return c.tipo === "receber" && c.status === "pago"; }));
-    var pagoPagar = sum(state.contas.filter(function(c){ return c.tipo === "pagar" && c.status === "pago"; }));
+    var vendedMes = state.vendas.filter(function(v){ return v.data.slice(0,7) === hoje.slice(0,7); });
+    var totalMes = vendedMes.reduce(function(s,v){ return s + v.total; }, 0);
 
+    document.getElementById("kpiTotal").textContent = kpiVisiveis ? brl(totalMes) : "R$ ••••";
     document.getElementById("finReceberPendente").textContent = brl(receberPendente);
     document.getElementById("finPagarPendente").textContent = brl(pagarPendente);
-    document.getElementById("kpiSaldoPrevisto").textContent = brl((pagoReceber - pagoPagar) + (receberPendente - pagarPendente));
 
-    var hoje = todayISO();
-    var pendentes = state.contas.filter(function(c){ return c.status === "pendente"; });
-    var vencidas = sum(pendentes.filter(function(c){ return c.vencimento < hoje; }));
-    var vencemHoje = sum(pendentes.filter(function(c){ return c.vencimento === hoje; }));
-    var aVencer = sum(pendentes.filter(function(c){ return c.vencimento > hoje; }));
-    document.getElementById("finVencidas").textContent = brl(vencidas);
-    document.getElementById("finVencemHoje").textContent = brl(vencemHoje);
-    document.getElementById("finAVencer").textContent = brl(aVencer);
+    var eyeBtn = document.getElementById("eyeTotal");
+    if(eyeBtn){
+      eyeBtn.innerHTML = kpiVisiveis ? EYE_OPEN_SVG : EYE_OFF_SVG;
+      eyeBtn.setAttribute("aria-pressed", kpiVisiveis ? "true" : "false");
+      eyeBtn.setAttribute("aria-label", kpiVisiveis ? "Ocultar valor" : "Mostrar valor");
+      eyeBtn.title = kpiVisiveis ? "Ocultar valor" : "Mostrar valor";
+    }
 
     var vendasHoje = state.vendas.filter(function(v){ return v.data === hoje; });
     document.getElementById("finVendasHojeTotal").textContent = brl(vendasHoje.reduce(function(s,v){ return s + v.total; }, 0));
@@ -898,10 +957,12 @@
   function toggleKpiVisiveis(){
     kpiVisiveis = !kpiVisiveis;
     renderDashboard();
+    renderFinanceiro();
   }
   document.getElementById("eyeVendas").addEventListener("click", toggleKpiVisiveis);
   document.getElementById("eyeDespesas").addEventListener("click", toggleKpiVisiveis);
   document.getElementById("eyeTotalLoja").addEventListener("click", toggleKpiVisiveis);
+  document.getElementById("eyeTotal").addEventListener("click", toggleKpiVisiveis);
 
   function toggleGraficosVisiveis(){
     if(graficosVisiveis){

@@ -191,9 +191,13 @@
       <!-- FINANCEIRO -->
       <section id="view-financeiro" class="view hidden">
         <div class="kpi-grid">
-          <div class="kpi-card">
-            <div class="kpi-label">Saldo previsto</div>
-            <div class="kpi-value" id="kpiSaldoPrevisto">R$ 0,00</div>
+          <div class="kpi-card kpi-card-clickable" id="kpiCardTotal" title="Ver detalhes das vendas">
+            <div class="kpi-label">Total</div>
+            <div class="kpi-value-row">
+              <div class="kpi-value kpi-value-lg kpi-value-green" id="kpiTotal">R$ ••••</div>
+              <button class="kpi-eye" id="eyeTotal" type="button" aria-label="Mostrar valor" title="Mostrar valor" aria-pressed="false"></button>
+            </div>
+            <div class="kpi-sub" id="kpiTotalSub">vendas do mês</div>
           </div>
           <div class="kpi-card">
             <div class="kpi-label">A receber (pendente)</div>
@@ -202,20 +206,6 @@
           <div class="kpi-card">
             <div class="kpi-label">A pagar (pendente)</div>
             <div class="kpi-value" id="finPagarPendente">R$ 0,00</div>
-          </div>
-        </div>
-        <div class="urgency-row">
-          <div class="urgency-chip urgency-danger">
-            <span class="urgency-label">Vencidas</span>
-            <span class="urgency-value" id="finVencidas">R$ 0,00</span>
-          </div>
-          <div class="urgency-chip urgency-warn">
-            <span class="urgency-label">Vencem hoje</span>
-            <span class="urgency-value" id="finVencemHoje">R$ 0,00</span>
-          </div>
-          <div class="urgency-chip urgency-muted">
-            <span class="urgency-label">A vencer</span>
-            <span class="urgency-value" id="finAVencer">R$ 0,00</span>
           </div>
         </div>
         <div class="panel">
