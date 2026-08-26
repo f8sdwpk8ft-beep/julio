@@ -944,6 +944,110 @@
     var vendasHoje = state.vendas.filter(function(v){ return v.data === hoje; });
     document.getElementById("finVendasHojeTotal").textContent = brl(vendasHoje.reduce(function(s,v){ return s + v.total; }, 0));
     document.getElementById("finVendasHojePagamentos").innerHTML = pagamentosChipsHtml(vendasHoje);
+
+    renderFechamentos();
+  }
+
+  function renderFechamentos(){
+    var hoje = todayISO();
+    var ym = hoje.slice(0,7);
+
+    var vendasHoje = state.vendas.filter(function(v){ return v.data === hoje; });
+    var despesasHoje = state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento === hoje; });
+
+    var pagamentosHoje = {};
+    ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix", "A prazo"].forEach(function(m){
+      pagamentosHoje[m] = vendasHoje.filter(function(v){ return v.pagamento === m; }).reduce(function(s,v){ return s + v.total; }, 0);
+    });
+
+    var totalVendasHoje = vendasHoje.reduce(function(s,v){ return s + v.total; }, 0);
+    var totalDespesasHoje = despesasHoje.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0);
+    var caixaEsperado = (pagamentosHoje["Dinheiro"] || 0) + (pagamentosHoje["Pix"] || 0) - totalDespesasHoje;
+
+    var fechamentoDiaHtml =
+      '<div class="fechamento-grid">' +
+        '<div class="fechamento-box">' +
+          '<div class="fechamento-label">Total de Vendas</div>' +
+          '<div class="fechamento-valor">' + brl(totalVendasHoje) + '</div>' +
+        '</div>' +
+        '<div class="fechamento-box">' +
+          '<div class="fechamento-label">Despesas do Dia</div>' +
+          '<div class="fechamento-valor" style="color:var(--danger);">' + brl(totalDespesasHoje) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="fechamento-detalhes">' +
+        '<div class="fechamento-detalhes-row">' +
+          '<span>Dinheiro</span><span>' + brl(pagamentosHoje["Dinheiro"] || 0) + '</span>' +
+        '</div>' +
+        '<div class="fechamento-detalhes-row">' +
+          '<span>Cartão de Crédito</span><span>' + brl(pagamentosHoje["Cartão de crédito"] || 0) + '</span>' +
+        '</div>' +
+        '<div class="fechamento-detalhes-row">' +
+          '<span>Cartão de Débito</span><span>' + brl(pagamentosHoje["Cartão de débito"] || 0) + '</span>' +
+        '</div>' +
+        '<div class="fechamento-detalhes-row">' +
+          '<span>Pix</span><span>' + brl(pagamentosHoje["Pix"] || 0) + '</span>' +
+        '</div>' +
+        '<div class="fechamento-detalhes-row">' +
+          '<span>A Prazo</span><span>' + brl(pagamentosHoje["A prazo"] || 0) + '</span>' +
+        '</div>' +
+        '<div style="margin-top:0.8rem;padding-top:0.8rem;border-top:2px solid var(--line);">' +
+          '<div class="fechamento-detalhes-row" style="font-weight:700;color:var(--ok);">' +
+            '<span>Caixa Esperado</span><span>' + brl(caixaEsperado) + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById("fechamentoDiaConteudo").innerHTML = fechamentoDiaHtml;
+
+    var vendasMes = state.vendas.filter(function(v){ return v.data.slice(0,7) === ym; });
+    var despesasMes = state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento.slice(0,7) === ym; });
+
+    var pagamentosMes = {};
+    ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix", "A prazo"].forEach(function(m){
+      pagamentosMes[m] = vendasMes.filter(function(v){ return v.pagamento === m; }).reduce(function(s,v){ return s + v.total; }, 0);
+    });
+
+    var totalVendasMes = vendasMes.reduce(function(s,v){ return s + v.total; }, 0);
+    var totalDespesasMes = despesasMes.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0);
+    var lucroMes = totalVendasMes - totalDespesasMes;
+
+    var fechamentoMesHtml =
+      '<div class="fechamento-grid">' +
+        '<div class="fechamento-box">' +
+          '<div class="fechamento-label">Total de Vendas</div>' +
+          '<div class="fechamento-valor">' + brl(totalVendasMes) + '</div>' +
+        '</div>' +
+        '<div class="fechamento-box">' +
+          '<div class="fechamento-label">Despesas do Mês</div>' +
+          '<div class="fechamento-valor" style="color:var(--danger);">' + brl(totalDespesasMes) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="fechamento-detalhes">' +
+        '<div class="fechamento-label" style="margin-bottom:0.6rem;">Vendas por tipo de pagamento</div>' +
+        '<div class="fechamento-detalhes-row">' +
+          '<span>Dinheiro</span><span>' + brl(pagamentosMes["Dinheiro"] || 0) + '</span>' +
+        '</div>' +
+        '<div class="fechamento-detalhes-row">' +
+          '<span>Cartão de Crédito</span><span>' + brl(pagamentosMes["Cartão de crédito"] || 0) + '</span>' +
+        '</div>' +
+        '<div class="fechamento-detalhes-row">' +
+          '<span>Cartão de Débito</span><span>' + brl(pagamentosMes["Cartão de débito"] || 0) + '</span>' +
+        '</div>' +
+        '<div class="fechamento-detalhes-row">' +
+          '<span>Pix</span><span>' + brl(pagamentosMes["Pix"] || 0) + '</span>' +
+        '</div>' +
+        '<div class="fechamento-detalhes-row">' +
+          '<span>A Prazo</span><span>' + brl(pagamentosMes["A prazo"] || 0) + '</span>' +
+        '</div>' +
+        '<div style="margin-top:0.8rem;padding-top:0.8rem;border-top:2px solid var(--line);">' +
+          '<div class="fechamento-detalhes-row" style="font-weight:700;color:var(--ok);">' +
+            '<span>Lucro do Mês</span><span>' + brl(lucroMes) + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById("fechamentoMesConteudo").innerHTML = fechamentoMesHtml;
   }
 
   function sum(arr){ return arr.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0); }

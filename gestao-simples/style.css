@@ -231,6 +231,17 @@ tbody tr:hover{background:#fafbfd;}
 .alerta-detalhes{font-size:0.75rem;color:var(--ink-dim);margin-top:0.25rem;}
 .alerta-valor{font-weight:800;color:var(--warn);white-space:nowrap;margin-left:0.5rem;}
 
+/* ---------- Fechamentos ---------- */
+.fechamento-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;}
+@media (max-width:800px){.fechamento-grid{grid-template-columns:1fr;}}
+.fechamento-box{background:var(--surface-2, rgba(0,0,0,0.02));border-radius:10px;padding:1rem;border:1px solid var(--line);}
+.fechamento-label{font-size:0.75rem;color:var(--ink-faint);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.25rem;}
+.fechamento-valor{font-size:1.4rem;font-weight:800;color:var(--ink);margin-bottom:0.5rem;}
+.fechamento-detalhes{font-size:0.8rem;color:var(--ink-dim);line-height:1.5;}
+.fechamento-detalhes-row{display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid var(--line);}
+.fechamento-detalhes-row:last-child{border-bottom:none;}
+.fechamento-btn{margin-top:1rem;width:100%;}
+
 /* ---------- Forms / Modal ---------- */
 .field{margin-bottom:0.9rem;}
 .field label{display:block;font-size:0.78rem;font-weight:700;color:var(--ink-dim);margin-bottom:0.35rem;}
