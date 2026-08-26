@@ -580,5 +580,60 @@
     renderFinanceiro();
   }
 
+  // ================= EXPORTAR / IMPORTAR =================
+  async function exportarDados(){
+    var json = JSON.stringify(state, null, 2);
+    var filename = "gestao-simples-dados-" + todayISO() + ".json";
+    if(window.claude && typeof window.claude.use === "function"){
+      try{
+        var downloadsApi = await window.claude.use("downloads");
+        if(downloadsApi){
+          await downloadsApi.save({ filename: filename, data: json });
+          toast("Dados exportados");
+          return;
+        }
+      }catch(e){ /* cai no fallback abaixo */ }
+    }
+    var blob = new Blob([json], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast("Dados exportados");
+  }
+
+  function importarDados(file){
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var parsed = JSON.parse(reader.result);
+        if(!parsed || typeof parsed !== "object") throw new Error("formato inválido");
+        state = Object.assign(structuredClone(DEFAULT_DATA), parsed);
+        saveData();
+        renderAll();
+        toast("Dados importados");
+      }catch(e){
+        toast("Arquivo inválido");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  document.getElementById("btnExportar").addEventListener("click", exportarDados);
+  document.getElementById("btnImportar").addEventListener("click", function(){
+    if(confirm("Importar vai substituir todos os dados atuais. Continuar?")){
+      document.getElementById("importFileInput").click();
+    }
+  });
+  document.getElementById("importFileInput").addEventListener("change", function(e){
+    var file = e.target.files[0];
+    if(file) importarDados(file);
+    e.target.value = "";
+  });
+
   renderAll();
 })();

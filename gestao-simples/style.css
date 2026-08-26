@@ -68,9 +68,14 @@ button, input, select{font-family:inherit;}
 .nav a.active{background:var(--brand);color:#fff;}
 
 .sidebar-footer{
-  padding:0.9rem 1.2rem;border-top:1px solid rgba(255,255,255,0.08);
+  padding:0.9rem 1.2rem 0;border-top:1px solid rgba(255,255,255,0.08);
   font-size:0.72rem;color:#6b7688;
 }
+.sidebar-data-actions{
+  display:flex;flex-direction:column;gap:0.4rem;
+  padding:0.75rem 1.2rem 1.1rem;
+}
+.sidebar-data-actions .btn{width:100%;justify-content:center;}
 
 .main{
   margin-left:var(--sidebar-w);
