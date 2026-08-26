@@ -327,8 +327,24 @@
       '<div class="vd-lista-wrap table-wrap">' +
         '<table><thead><tr><th>Data</th><th>Horário</th><th>Cliente</th><th>Total</th></tr></thead><tbody id="vdTbody"></tbody></table>' +
       '</div>' +
-      '<div class="venda-total"><span>Total do período</span><span id="vdTotalValor">R$ 0,00</span></div>'
+      '<div class="venda-total"><span>Total do período</span><span id="vdTotalValor">R$ 0,00</span></div>' +
+      '<div class="vd-pagamentos" id="vdPagamentos"></div>'
     );
+  }
+
+  var METODOS_PAGAMENTO = ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix"];
+
+  function resumoPorPagamento(lista){
+    return METODOS_PAGAMENTO.map(function(m){
+      var total = lista.filter(function(v){ return v.pagamento === m; }).reduce(function(s,v){ return s + v.total; }, 0);
+      return { metodo: m, total: total };
+    });
+  }
+
+  function pagamentosChipsHtml(lista){
+    return resumoPorPagamento(lista).map(function(r){
+      return '<div class="pgto-chip"><div class="pgto-chip-label">' + esc(r.metodo) + '</div><div class="pgto-chip-value">' + brl(r.total) + '</div></div>';
+    }).join("");
   }
 
   function horaDaVenda(v){
@@ -358,6 +374,7 @@
               '</tr>';
             }).join("");
         body.querySelector("#vdTotalValor").textContent = brl(lista.reduce(function(s,v){ return s + v.total; }, 0));
+        body.querySelector("#vdPagamentos").innerHTML = pagamentosChipsHtml(lista);
       }
 
       function marcarChipAtivo(){
@@ -439,7 +456,11 @@
       '<div class="field-row">' +
         '<div class="field"><label>Cliente</label><select id="fCliente">' + clienteOptions + '</select></div>' +
         '<div class="field"><label>Forma de pagamento</label><select id="fPagamento">' +
-          '<option value="À vista">À vista</option><option value="A prazo">A prazo</option>' +
+          '<option value="Dinheiro">Dinheiro</option>' +
+          '<option value="Cartão de crédito">Cartão de crédito</option>' +
+          '<option value="Cartão de débito">Cartão de débito</option>' +
+          '<option value="Pix">Pix</option>' +
+          '<option value="A prazo">A prazo</option>' +
         '</select></div>' +
       '</div>' +
       '<div class="field"><label>Data</label><input id="fData" type="date" value="' + todayISO() + '"></div>' +
@@ -541,7 +562,7 @@
             tipo: "receber",
             vencimento: venda.data,
             valor: total,
-            status: pagamento === "À vista" ? "pago" : "pendente",
+            status: pagamento === "A prazo" ? "pendente" : "pago",
             vendaId: venda.id
           });
 
@@ -613,6 +634,10 @@
     document.getElementById("finVencidas").textContent = brl(vencidas);
     document.getElementById("finVencemHoje").textContent = brl(vencemHoje);
     document.getElementById("finAVencer").textContent = brl(aVencer);
+
+    var vendasHoje = state.vendas.filter(function(v){ return v.data === hoje; });
+    document.getElementById("finVendasHojeTotal").textContent = brl(vendasHoje.reduce(function(s,v){ return s + v.total; }, 0));
+    document.getElementById("finVendasHojePagamentos").innerHTML = pagamentosChipsHtml(vendasHoje);
   }
 
   function sum(arr){ return arr.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0); }

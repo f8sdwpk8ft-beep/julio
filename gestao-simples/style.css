@@ -257,6 +257,14 @@ tbody tr:hover{background:#fafbfd;}
 .venda-detalhe-itens{margin:0.5rem 0;font-size:0.86rem;}
 .venda-detalhe-itens div{padding:0.25rem 0;}
 
+.vd-pagamentos{display:flex;gap:0.6rem;flex-wrap:wrap;margin-top:0.9rem;}
+.pgto-chip{
+  flex:1;min-width:110px;background:var(--surface-2, #fafbfd);border-radius:10px;
+  padding:0.6rem 0.75rem;
+}
+.pgto-chip-label{font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;color:var(--ink-faint);}
+.pgto-chip-value{font-size:1rem;font-weight:800;margin-top:0.15rem;font-variant-numeric:tabular-nums;}
+
 .toast{
   position:fixed;bottom:1.5rem;right:1.5rem;z-index:200;
   background:var(--ink);color:#fff;padding:0.75rem 1.1rem;border-radius:10px;
