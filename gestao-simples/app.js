@@ -1264,7 +1264,6 @@
   }
   document.getElementById("eyeVendas").addEventListener("click", toggleKpiVisiveis);
   document.getElementById("eyeDespesas").addEventListener("click", toggleKpiVisiveis);
-  document.getElementById("eyeTotalLoja").addEventListener("click", toggleKpiVisiveis);
   document.getElementById("eyeTotal").addEventListener("click", toggleKpiVisiveis);
   document.getElementById("eyeDespesasTotal").addEventListener("click", toggleKpiVisiveis);
 
@@ -1413,15 +1412,7 @@
     document.getElementById("kpiPagar").textContent = kpiVisiveis ? brl(sum(pagarPendente)) : "R$ ••••";
     document.getElementById("kpiPagarQtd").textContent = pagarPendente.length + " pendentes";
 
-    var totalVendasGeral = sum(state.vendas.map(function(v){ return { valor: v.total }; }));
-    var totalDespesasGeral = sum(state.contas.filter(function(c){ return c.tipo === "pagar"; }));
-    var totalLoja = totalVendasGeral - totalDespesasGeral;
-    var totalLojaEl = document.getElementById("kpiTotalLoja");
-    totalLojaEl.textContent = kpiVisiveis ? brl(totalLoja) : "R$ ••••";
-    totalLojaEl.classList.remove("kpi-value-green", "kpi-value-red");
-    if(kpiVisiveis) totalLojaEl.classList.add(totalLoja >= 0 ? "kpi-value-green" : "kpi-value-red");
-
-    [document.getElementById("eyeVendas"), document.getElementById("eyeDespesas"), document.getElementById("eyeTotalLoja")].forEach(function(btn){
+    [document.getElementById("eyeVendas"), document.getElementById("eyeDespesas")].forEach(function(btn){
       btn.innerHTML = kpiVisiveis ? EYE_OPEN_SVG : EYE_OFF_SVG;
       btn.setAttribute("aria-pressed", kpiVisiveis ? "true" : "false");
       btn.setAttribute("aria-label", kpiVisiveis ? "Ocultar valor" : "Mostrar valor");
