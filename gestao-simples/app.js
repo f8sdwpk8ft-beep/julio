@@ -197,13 +197,12 @@
       return;
     }
     tbody.innerHTML = list.map(function(p){
-      var baixo = Number(p.estoque) <= Number(p.estoqueMinimo || 0);
       return '<tr>' +
         '<td class="cell-strong">' + esc(p.nome) + '</td>' +
         '<td>' + esc(p.categoria || "-") + '</td>' +
         '<td>' + brl(p.preco) + '</td>' +
         '<td>' + brl(p.custo) + '</td>' +
-        '<td>' + p.estoque + ' ' + (baixo ? '<span class="badge badge-danger">baixo</span>' : '') + '</td>' +
+        '<td>' + p.estoque + '</td>' +
         '<td class="cell-actions">' +
           '<button class="btn btn-ghost btn-sm" data-edit-produto="' + p.id + '">Editar</button>' +
           '<button class="btn btn-danger btn-sm" data-del-produto="' + p.id + '">Excluir</button>' +
@@ -216,10 +215,7 @@
     p = p || {};
     return (
       '<div class="field"><label>Nome</label><input id="fNome" value="' + esc(p.nome||"") + '" placeholder="Nome do produto"></div>' +
-      '<div class="field-row">' +
-        '<div class="field"><label>Categoria</label><input id="fCategoria" value="' + esc(p.categoria||"") + '"></div>' +
-        '<div class="field"><label>Estoque mínimo</label><input id="fMin" type="number" min="0" value="' + (p.estoqueMinimo != null ? p.estoqueMinimo : 0) + '"></div>' +
-      '</div>' +
+      '<div class="field"><label>Categoria</label><input id="fCategoria" value="' + esc(p.categoria||"") + '"></div>' +
       '<div class="field-row">' +
         '<div class="field"><label>Preço de venda</label><input id="fPreco" type="number" min="0" step="0.01" value="' + (p.preco != null ? p.preco : "") + '"></div>' +
         '<div class="field"><label>Custo</label><input id="fCusto" type="number" min="0" step="0.01" value="' + (p.custo != null ? p.custo : "") + '"></div>' +
@@ -241,8 +237,7 @@
           categoria: body.querySelector("#fCategoria").value.trim(),
           preco: parseFloat(body.querySelector("#fPreco").value) || 0,
           custo: parseFloat(body.querySelector("#fCusto").value) || 0,
-          estoque: parseInt(body.querySelector("#fEstoque").value, 10) || 0,
-          estoqueMinimo: parseInt(body.querySelector("#fMin").value, 10) || 0
+          estoque: parseInt(body.querySelector("#fEstoque").value, 10) || 0
         };
         if(p){
           Object.assign(p, data);
@@ -537,23 +532,40 @@
   });
 
   // ================= DASHBOARD =================
+  // Estado só de sessão (não é salvo): a cada carregamento/atualização da
+  // página os valores voltam a ficar ocultos por padrão.
+  var valoresVisiveis = false;
+  var EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var EYE_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c7 0 10.5 7 10.5 7a13.2 13.2 0 0 1-3.1 4.1M6.5 6.6C3.4 8.5 1.5 12 1.5 12S5 19 12 19a10.6 10.6 0 0 0 4.2-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+
+  function toggleValoresVisiveis(){
+    valoresVisiveis = !valoresVisiveis;
+    renderDashboard();
+  }
+  document.getElementById("eyeVendas").addEventListener("click", toggleValoresVisiveis);
+  document.getElementById("eyeDespesas").addEventListener("click", toggleValoresVisiveis);
+
   function renderDashboard(){
     var now = new Date();
     var ym = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0");
     var vendasMes = state.vendas.filter(function(v){ return v.data.slice(0,7) === ym; });
-    document.getElementById("kpiVendasMes").textContent = brl(sum(vendasMes.map(function(v){ return { valor: v.total }; })));
+    var totalVendas = sum(vendasMes.map(function(v){ return { valor: v.total }; }));
+    document.getElementById("kpiVendasMes").textContent = valoresVisiveis ? brl(totalVendas) : "R$ ••••";
     document.getElementById("kpiVendasQtd").textContent = vendasMes.length + " vendas";
 
     var receberPendente = state.contas.filter(function(c){ return c.tipo === "receber" && c.status === "pendente"; });
     var pagarPendente = state.contas.filter(function(c){ return c.tipo === "pagar" && c.status === "pendente"; });
     document.getElementById("kpiReceber").textContent = brl(sum(receberPendente));
     document.getElementById("kpiReceberQtd").textContent = receberPendente.length + " pendentes";
-    document.getElementById("kpiPagar").textContent = brl(sum(pagarPendente));
+    document.getElementById("kpiPagar").textContent = valoresVisiveis ? brl(sum(pagarPendente)) : "R$ ••••";
     document.getElementById("kpiPagarQtd").textContent = pagarPendente.length + " pendentes";
 
-    var estoqueBaixo = state.produtos.filter(function(p){ return Number(p.estoque) <= Number(p.estoqueMinimo || 0); });
-    document.getElementById("kpiEstoqueBaixo").textContent = estoqueBaixo.length;
-    document.getElementById("kpiEstoqueTotal").textContent = "de " + state.produtos.length + " produtos";
+    [document.getElementById("eyeVendas"), document.getElementById("eyeDespesas")].forEach(function(btn){
+      btn.innerHTML = valoresVisiveis ? EYE_OPEN_SVG : EYE_OFF_SVG;
+      btn.setAttribute("aria-pressed", valoresVisiveis ? "true" : "false");
+      btn.setAttribute("aria-label", valoresVisiveis ? "Ocultar valor" : "Mostrar valor");
+      btn.title = valoresVisiveis ? "Ocultar valor" : "Mostrar valor";
+    });
 
     var ultimasVendas = state.vendas.slice().sort(function(a,b){ return b.data.localeCompare(a.data); }).slice(0,6);
     var tblU = document.getElementById("tblUltimasVendas");
@@ -561,13 +573,6 @@
       ? '<tr class="empty-row"><td colspan="4">Nenhuma venda registrada.</td></tr>'
       : ultimasVendas.map(function(v){
           return '<tr><td>' + fmtDate(v.data) + '</td><td>' + esc(clienteNome(v.clienteId)) + '</td><td>' + v.itens.length + ' item(ns)</td><td class="cell-strong">' + brl(v.total) + '</td></tr>';
-        }).join("");
-
-    var tblE = document.getElementById("tblEstoqueBaixo");
-    tblE.innerHTML = estoqueBaixo.length === 0
-      ? '<tr class="empty-row"><td colspan="3">Nenhum produto com estoque baixo.</td></tr>'
-      : estoqueBaixo.map(function(p){
-          return '<tr><td class="cell-strong">' + esc(p.nome) + '</td><td>' + p.estoque + '</td><td>' + (p.estoqueMinimo||0) + '</td></tr>';
         }).join("");
   }
 

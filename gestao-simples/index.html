@@ -63,13 +63,19 @@
       <section id="view-dashboard" class="view">
         <div class="kpi-grid">
           <div class="kpi-card">
-            <div class="kpi-label">Vendas no mês</div>
-            <div class="kpi-value kpi-value-lg kpi-value-green" id="kpiVendasMes">R$ 0,00</div>
+            <div class="kpi-label">Vendas</div>
+            <div class="kpi-value-row">
+              <div class="kpi-value kpi-value-lg kpi-value-green" id="kpiVendasMes">R$ ••••</div>
+              <button class="kpi-eye" id="eyeVendas" type="button" aria-label="Mostrar valor" title="Mostrar valor" aria-pressed="false"></button>
+            </div>
             <div class="kpi-sub" id="kpiVendasQtd">0 vendas</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-label">Despesas (a pagar)</div>
-            <div class="kpi-value kpi-value-lg kpi-value-red" id="kpiPagar">R$ 0,00</div>
+            <div class="kpi-label">Despesas</div>
+            <div class="kpi-value-row">
+              <div class="kpi-value kpi-value-lg kpi-value-red" id="kpiPagar">R$ ••••</div>
+              <button class="kpi-eye" id="eyeDespesas" type="button" aria-label="Mostrar valor" title="Mostrar valor" aria-pressed="false"></button>
+            </div>
             <div class="kpi-sub danger" id="kpiPagarQtd">0 pendentes</div>
           </div>
           <div class="kpi-card">
@@ -77,31 +83,15 @@
             <div class="kpi-value" id="kpiReceber">R$ 0,00</div>
             <div class="kpi-sub warn" id="kpiReceberQtd">0 pendentes</div>
           </div>
-          <div class="kpi-card">
-            <div class="kpi-label">Produtos em estoque baixo</div>
-            <div class="kpi-value" id="kpiEstoqueBaixo">0</div>
-            <div class="kpi-sub" id="kpiEstoqueTotal">de 0 produtos</div>
-          </div>
         </div>
 
-        <div class="panel-grid">
-          <div class="panel">
-            <div class="panel-head"><h2>Últimas vendas</h2></div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Total</th></tr></thead>
-                <tbody id="tblUltimasVendas"></tbody>
-              </table>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-head"><h2>Estoque baixo</h2></div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Produto</th><th>Estoque</th><th>Mínimo</th></tr></thead>
-                <tbody id="tblEstoqueBaixo"></tbody>
-              </table>
-            </div>
+        <div class="panel">
+          <div class="panel-head"><h2>Últimas vendas</h2></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Total</th></tr></thead>
+              <tbody id="tblUltimasVendas"></tbody>
+            </table>
           </div>
         </div>
       </section>
