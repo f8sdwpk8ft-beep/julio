@@ -237,6 +237,7 @@ tbody tr:hover{background:#fafbfd;}
   background:#fff;border-radius:16px;max-width:520px;width:100%;
   padding:1.5rem 1.6rem;box-shadow:0 30px 80px -20px rgba(0,0,0,0.35);
 }
+.modal-lg{max-width:960px;}
 .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem;}
 .modal-head h3{margin:0;font-size:1.05rem;font-weight:800;}
 .modal-close{background:none;border:none;cursor:pointer;color:var(--ink-faint);font-size:1.2rem;line-height:1;padding:0.2rem;}
@@ -247,10 +248,13 @@ tbody tr:hover{background:#fafbfd;}
 .venda-item-row:last-child{margin-bottom:0;}
 .venda-total{display:flex;justify-content:space-between;align-items:center;padding-top:0.6rem;margin-top:0.6rem;border-top:1px dashed var(--line);font-weight:800;}
 
-.vd-filtros{display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.9rem;}
-.vd-lista-wrap{max-height:280px;overflow-y:auto;}
+.vd-filtros{display:flex;gap:0.6rem;flex-wrap:wrap;margin-bottom:1rem;}
+.vd-filtros .btn{font-size:0.86rem;padding:0.6rem 1.1rem;}
+.vd-lista-wrap{max-height:420px;overflow-y:auto;}
+.vd-lista-wrap table{font-size:0.92rem;}
 .vd-row{cursor:pointer;}
 .vd-row:hover{background:var(--surface-2, #fafbfd);}
+.vd-total-destaque{margin:1.25rem 0 0.25rem;padding-top:1rem;border-top:1px dashed var(--line);}
 .venda-detalhe-linha{display:flex;justify-content:space-between;gap:1rem;padding:0.4rem 0;border-bottom:1px solid var(--line);font-size:0.88rem;}
 .venda-detalhe-linha:last-of-type{border-bottom:none;}
 .venda-detalhe-linha span:first-child{color:var(--ink-dim);font-weight:600;}

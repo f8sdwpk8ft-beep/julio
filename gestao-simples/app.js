@@ -3,7 +3,7 @@
 
   var STORAGE_KEY = "gestao-simples-data-v1";
 
-  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [] };
+  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"] };
 
   function loadData(){
     try{
@@ -62,10 +62,11 @@
 
   // ---------- Modal ----------
   var modalRoot = document.getElementById("modalRoot");
-  function openModal(title, bodyHtml, onMount){
+  function openModal(title, bodyHtml, onMount, opts){
+    opts = opts || {};
     modalRoot.innerHTML =
       '<div class="modal-backdrop" id="modalBackdrop">' +
-        '<div class="modal">' +
+        '<div class="modal' + (opts.large ? " modal-lg" : "") + '">' +
           '<div class="modal-head"><h3>' + esc(title) + '</h3>' +
             '<button class="modal-close" id="modalClose">&times;</button></div>' +
           '<div id="modalBody">' + bodyHtml + '</div>' +
@@ -327,7 +328,10 @@
       '<div class="vd-lista-wrap table-wrap">' +
         '<table><thead><tr><th>Data</th><th>Horário</th><th>Cliente</th><th>Total</th></tr></thead><tbody id="vdTbody"></tbody></table>' +
       '</div>' +
-      '<div class="venda-total"><span>Total do período</span><span id="vdTotalValor">R$ 0,00</span></div>' +
+      '<div class="vd-total-destaque">' +
+        '<div class="kpi-label">Total do período</div>' +
+        '<div class="kpi-value kpi-value-lg kpi-value-green" id="vdTotalValor">R$ 0,00</div>' +
+      '</div>' +
       '<div class="vd-pagamentos" id="vdPagamentos"></div>'
     );
   }
@@ -405,7 +409,7 @@
       });
 
       renderLista();
-    });
+    }, { large: true });
   }
 
   function abrirDetalheVenda(vendaId){
@@ -431,6 +435,132 @@
   document.getElementById("kpiCardVendas").addEventListener("click", function(e){
     if(e.target.closest(".kpi-eye")) return;
     abrirDetalhesVendas();
+  });
+
+  // ---------- Detalhes de despesas (por período) ----------
+  function filtrarDespesasPorPeriodo(filtro, dataCustom){
+    var despesas = state.contas.filter(function(c){ return c.tipo === "pagar"; });
+    var hoje = todayISO();
+    if(filtro === "data") return despesas.filter(function(c){ return c.vencimento === (dataCustom || hoje); });
+    if(filtro === "ontem") return despesas.filter(function(c){ return c.vencimento === diaAnterior(hoje); });
+    if(filtro === "mes") return despesas.filter(function(c){ return c.vencimento.slice(0,7) === hoje.slice(0,7); });
+    if(filtro === "ano") return despesas.filter(function(c){ return c.vencimento.slice(0,4) === hoje.slice(0,4); });
+    return despesas.filter(function(c){ return c.vencimento === hoje; });
+  }
+
+  function resumoPorNatureza(lista){
+    var mapa = {};
+    lista.forEach(function(c){
+      var nat = c.natureza || "Sem natureza";
+      mapa[nat] = (mapa[nat] || 0) + Number(c.valor || 0);
+    });
+    return Object.keys(mapa).map(function(k){ return { natureza: k, total: mapa[k] }; });
+  }
+
+  function naturezaChipsHtml(lista){
+    var resumo = resumoPorNatureza(lista);
+    if(resumo.length === 0) return "";
+    return resumo.map(function(r){
+      return '<div class="pgto-chip"><div class="pgto-chip-label">' + esc(r.natureza) + '</div><div class="pgto-chip-value">' + brl(r.total) + '</div></div>';
+    }).join("");
+  }
+
+  function despesasDetalheHtml(filtro, dataCustom){
+    function chip(valor, label){
+      return '<button type="button" class="btn btn-sm ' + (filtro === valor ? "btn-primary" : "btn-ghost") + '" data-dd-filtro="' + valor + '">' + label + '</button>';
+    }
+    return (
+      '<div class="vd-filtros">' +
+        chip("hoje", "Hoje") + chip("ontem", "Ontem") + chip("mes", "Este mês") + chip("ano", "Este ano") +
+      '</div>' +
+      '<div class="field"><label>Ou escolha um dia</label><input type="date" id="ddData" value="' + (dataCustom || todayISO()) + '"></div>' +
+      '<div class="vd-lista-wrap table-wrap">' +
+        '<table><thead><tr><th>Vencimento</th><th>Descrição</th><th>Natureza</th><th>Pagamento</th><th>Valor</th></tr></thead><tbody id="ddTbody"></tbody></table>' +
+      '</div>' +
+      '<div class="vd-total-destaque">' +
+        '<div class="kpi-label">Total do período</div>' +
+        '<div class="kpi-value kpi-value-lg kpi-value-red" id="ddTotalValor">R$ 0,00</div>' +
+      '</div>' +
+      '<div class="vd-pagamentos" id="ddNaturezas"></div>'
+    );
+  }
+
+  function abrirDetalhesDespesas(){
+    var estadoFiltro = { filtro: "hoje", data: todayISO() };
+
+    openModal("Despesas", despesasDetalheHtml(estadoFiltro.filtro, estadoFiltro.data), function(body){
+      function renderLista(){
+        var lista = filtrarDespesasPorPeriodo(estadoFiltro.filtro, estadoFiltro.data).sort(function(a,b){
+          return b.vencimento.localeCompare(a.vencimento);
+        });
+        var tbody = body.querySelector("#ddTbody");
+        tbody.innerHTML = lista.length === 0
+          ? '<tr class="empty-row"><td colspan="5">Nenhuma despesa neste período.</td></tr>'
+          : lista.map(function(c){
+              return '<tr class="vd-row" data-dd-conta="' + c.id + '">' +
+                '<td>' + fmtDate(c.vencimento) + '</td>' +
+                '<td class="cell-strong">' + esc(c.descricao) + '</td>' +
+                '<td>' + esc(c.natureza || "-") + '</td>' +
+                '<td>' + esc(c.formaPagamento || "-") + '</td>' +
+                '<td class="cell-strong">' + brl(c.valor) + '</td>' +
+              '</tr>';
+            }).join("");
+        body.querySelector("#ddTotalValor").textContent = brl(lista.reduce(function(s,c){ return s + Number(c.valor||0); }, 0));
+        body.querySelector("#ddNaturezas").innerHTML = naturezaChipsHtml(lista);
+      }
+
+      function marcarChipAtivo(){
+        body.querySelectorAll("[data-dd-filtro]").forEach(function(btn){
+          btn.classList.toggle("btn-primary", btn.dataset.ddFiltro === estadoFiltro.filtro);
+          btn.classList.toggle("btn-ghost", btn.dataset.ddFiltro !== estadoFiltro.filtro);
+        });
+      }
+
+      body.querySelectorAll("[data-dd-filtro]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          estadoFiltro.filtro = btn.dataset.ddFiltro;
+          marcarChipAtivo();
+          renderLista();
+        });
+      });
+
+      body.querySelector("#ddData").addEventListener("change", function(e){
+        estadoFiltro.filtro = "data";
+        estadoFiltro.data = e.target.value || todayISO();
+        marcarChipAtivo();
+        renderLista();
+      });
+
+      body.querySelector("#ddTbody").addEventListener("click", function(e){
+        var row = e.target.closest("[data-dd-conta]");
+        if(row) abrirDetalheDespesa(row.dataset.ddConta);
+      });
+
+      renderLista();
+    }, { large: true });
+  }
+
+  function abrirDetalheDespesa(contaId){
+    var c = state.contas.find(function(x){ return x.id === contaId; });
+    if(!c) return;
+    var badge = c.status === "pago" ? '<span class="badge badge-ok">pago</span>' : '<span class="badge badge-warn">pendente</span>';
+    openModal("Detalhes da despesa", (
+      '<div class="venda-detalhe-linha"><span>Descrição</span><span>' + esc(c.descricao) + '</span></div>' +
+      '<div class="venda-detalhe-linha"><span>Vencimento</span><span>' + fmtDate(c.vencimento) + '</span></div>' +
+      '<div class="venda-detalhe-linha"><span>Natureza</span><span>' + esc(c.natureza || "-") + '</span></div>' +
+      '<div class="venda-detalhe-linha"><span>Forma de pagamento</span><span>' + esc(c.formaPagamento || "-") + '</span></div>' +
+      '<div class="venda-detalhe-linha"><span>Status</span><span>' + badge + '</span></div>' +
+      '<div class="venda-total"><span>Valor</span><span>' + brl(c.valor) + '</span></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnVoltarLista">Voltar</button><button class="btn btn-primary" id="btnFecharDetalhe">Fechar</button></div>'
+    ), function(body){
+      body.querySelector("#btnFecharDetalhe").addEventListener("click", closeModal);
+      body.querySelector("#btnVoltarLista").addEventListener("click", abrirDetalhesDespesas);
+    });
+  }
+
+  document.getElementById("kpiCardDespesas").addEventListener("click", function(e){
+    if(e.target.closest(".kpi-eye")) return;
+    abrirDetalhesDespesas();
   });
 
   function vendaFormRow(item, idx){
@@ -599,13 +729,15 @@
     var tbody = document.getElementById("tblContas");
     var list = state.contas.slice().sort(function(a,b){ return a.vencimento.localeCompare(b.vencimento); });
     if(list.length === 0){
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhuma conta lançada.</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Nenhuma conta lançada.</td></tr>';
     } else {
       tbody.innerHTML = list.map(function(c){
         var badge = c.status === "pago" ? '<span class="badge badge-ok">pago</span>' : '<span class="badge badge-warn">pendente</span>';
         return '<tr>' +
           '<td class="cell-strong">' + esc(c.descricao) + '</td>' +
+          '<td>' + esc(c.natureza || "-") + '</td>' +
           '<td>' + (c.tipo === "receber" ? "A receber" : "A pagar") + '</td>' +
+          '<td>' + esc(c.formaPagamento || "-") + '</td>' +
           '<td>' + fmtDate(c.vencimento) + '</td>' +
           '<td>' + brl(c.valor) + '</td>' +
           '<td>' + badge + '</td>' +
@@ -642,12 +774,31 @@
 
   function sum(arr){ return arr.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0); }
 
+  function naturezaOptionsHtml(selecionada){
+    return state.naturezas.map(function(n){
+      return '<option value="' + esc(n) + '"' + (n === selecionada ? " selected" : "") + '>' + esc(n) + '</option>';
+    }).join("");
+  }
+
+  function formaPagamentoOptionsHtml(selecionada){
+    return METODOS_PAGAMENTO.map(function(m){
+      return '<option value="' + esc(m) + '"' + (m === selecionada ? " selected" : "") + '>' + esc(m) + '</option>';
+    }).join("");
+  }
+
   function contaForm(){
     return (
       '<div class="field"><label>Descrição</label><input id="fDescricao" placeholder="Ex: Aluguel, fornecedor..."></div>' +
       '<div class="field-row">' +
         '<div class="field"><label>Tipo</label><select id="fTipo"><option value="pagar">A pagar</option><option value="receber">A receber</option></select></div>' +
         '<div class="field"><label>Valor</label><input id="fValor" type="number" min="0" step="0.01"></div>' +
+      '</div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>Natureza</label><div style="display:flex;gap:0.4rem;">' +
+          '<select id="fNatureza" style="flex:1;">' + naturezaOptionsHtml() + '</select>' +
+          '<button type="button" class="btn btn-ghost btn-sm" id="btnNovaNatureza" title="Adicionar nova natureza">+</button>' +
+        '</div></div>' +
+        '<div class="field"><label>Forma de pagamento</label><select id="fFormaPagamento">' + formaPagamentoOptionsHtml() + '</select></div>' +
       '</div>' +
       '<div class="field-row">' +
         '<div class="field"><label>Vencimento</label><input id="fVencimento" type="date" value="' + todayISO() + '"></div>' +
@@ -660,6 +811,20 @@
   document.getElementById("btnNovaConta").addEventListener("click", function(){
     openModal("Nova conta", contaForm(), function(body){
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
+
+      body.querySelector("#btnNovaNatureza").addEventListener("click", function(){
+        var nome = prompt("Nome da nova natureza de despesa:");
+        if(!nome) return;
+        nome = nome.trim();
+        if(!nome) return;
+        if(state.naturezas.indexOf(nome) === -1){
+          state.naturezas.push(nome);
+          saveData();
+        }
+        var select = body.querySelector("#fNatureza");
+        select.innerHTML = naturezaOptionsHtml(nome);
+      });
+
       body.querySelector("#btnSave").addEventListener("click", function(){
         var descricao = body.querySelector("#fDescricao").value.trim();
         var valor = parseFloat(body.querySelector("#fValor").value) || 0;
@@ -668,6 +833,8 @@
           id: uid(),
           descricao: descricao,
           tipo: body.querySelector("#fTipo").value,
+          natureza: body.querySelector("#fNatureza").value || null,
+          formaPagamento: body.querySelector("#fFormaPagamento").value || null,
           valor: valor,
           vencimento: body.querySelector("#fVencimento").value || todayISO(),
           status: body.querySelector("#fStatus").value
