@@ -225,6 +225,18 @@
           </div>
         </div>
         <div class="panel">
+          <div class="panel-head">
+            <h2>Devedores</h2>
+            <button class="btn btn-primary" id="btnNovoDevedor">+ Adicionar devedor</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Pessoa/Cliente</th><th>Motivo</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+              <tbody id="tblDevedores"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
           <div class="panel-head"><h2>Vendas de hoje</h2></div>
           <div class="kpi-value-row vd-clicavel" style="margin-bottom:0.9rem; cursor: pointer;" id="finVendasHojeRow" title="Ver detalhes das vendas de hoje">
             <div class="kpi-value kpi-value-lg kpi-value-green" id="finVendasHojeTotal">R$ 0,00</div>

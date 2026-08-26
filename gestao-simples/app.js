@@ -849,6 +849,26 @@
       }).join("");
     }
 
+    var devedores = state.contas.filter(function(c){ return c.tipo === "receber" && c.status === "pendente"; }).slice().sort(function(a,b){ return a.vencimento.localeCompare(b.vencimento); });
+    var tbodyDev = document.getElementById("tblDevedores");
+    if(devedores.length === 0){
+      tbodyDev.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhum devedor registrado.</td></tr>';
+    } else {
+      tbodyDev.innerHTML = devedores.map(function(c){
+        return '<tr>' +
+          '<td class="cell-strong">' + esc(c.descricao) + '</td>' +
+          '<td>' + esc(c.natureza || "-") + '</td>' +
+          '<td>' + fmtDate(c.vencimento) + '</td>' +
+          '<td>' + brl(c.valor) + '</td>' +
+          '<td><span class="badge badge-warn">pendente</span></td>' +
+          '<td class="cell-actions">' +
+            '<button class="btn btn-ghost btn-sm" data-recebido-conta="' + c.id + '">Marcar recebido</button>' +
+            '<button class="btn btn-danger btn-sm" data-del-devedor="' + c.id + '">Remover</button>' +
+          '</td>' +
+        '</tr>';
+      }).join("");
+    }
+
     var pagarPendente = sum(state.contas.filter(function(c){ return c.tipo === "pagar" && c.status === "pendente"; }));
     var despesasMes = state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento.slice(0,7) === hoje.slice(0,7); });
     var despesasTotalMes = sum(despesasMes);
@@ -948,6 +968,39 @@
     });
   });
 
+  document.getElementById("btnNovoDevedor").addEventListener("click", function(){
+    openModal("Novo devedor", (
+      '<div class="field"><label>Pessoa/Cliente</label><input id="fDevedorNome" placeholder="Nome de quem deve"></div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>Motivo da dívida</label><input id="fDevedorMotivo" placeholder="Ex: Venda a prazo, empréstimo..."></div>' +
+        '<div class="field"><label>Valor</label><input id="fDevedorValor" type="number" min="0" step="0.01"></div>' +
+      '</div>' +
+      '<div class="field"><label>Vencimento</label><input id="fDevedorVencimento" type="date" value="' + todayISO() + '"></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">Salvar</button></div>'
+    ), function(body){
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelector("#btnSave").addEventListener("click", function(){
+        var nome = body.querySelector("#fDevedorNome").value.trim();
+        var motivo = body.querySelector("#fDevedorMotivo").value.trim();
+        var valor = parseFloat(body.querySelector("#fDevedorValor").value) || 0;
+        if(!nome || !motivo || valor <= 0){ toast("Preencha todos os campos corretamente"); return; }
+        state.contas.push({
+          id: uid(),
+          descricao: nome,
+          tipo: "receber",
+          natureza: motivo,
+          valor: valor,
+          vencimento: body.querySelector("#fDevedorVencimento").value || todayISO(),
+          status: "pendente"
+        });
+        saveData();
+        closeModal();
+        renderAll();
+        toast("Devedor adicionado");
+      });
+    });
+  });
+
   document.getElementById("tblContas").addEventListener("click", function(e){
     var payId = e.target.dataset.payConta;
     var delId = e.target.dataset.delConta;
@@ -956,9 +1009,27 @@
       if(c){ c.status = "pago"; saveData(); renderAll(); toast("Conta marcada como paga"); }
     }
     if(delId){
-      if(confirm("Excluir esta conta?")){
+      var c = state.contas.find(function(c){ return c.id === delId; });
+      if(!c) return;
+      if(confirm("Converter esta despesa para dívida de cliente?")){
+        c.tipo = "receber";
+        c.status = "pendente";
+        saveData(); renderAll(); toast("Convertida para dívida de cliente");
+      }
+    }
+  });
+
+  document.getElementById("tblDevedores").addEventListener("click", function(e){
+    var recebidoId = e.target.dataset.recebidoConta;
+    var delId = e.target.dataset.delDevedor;
+    if(recebidoId){
+      var c = state.contas.find(function(c){ return c.id === recebidoId; });
+      if(c){ c.status = "pago"; saveData(); renderAll(); toast("Dívida marcada como recebida"); }
+    }
+    if(delId){
+      if(confirm("Remover este devedor?")){
         state.contas = state.contas.filter(function(c){ return c.id !== delId; });
-        saveData(); renderAll(); toast("Conta excluída");
+        saveData(); renderAll(); toast("Devedor removido");
       }
     }
   });
