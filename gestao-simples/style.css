@@ -189,8 +189,10 @@ button, input, select{font-family:inherit;}
 .btn:active{transform:translateY(1px);}
 .btn-primary{background:var(--brand);color:#fff;font-weight:700;}
 .btn-primary:hover{filter:brightness(1.08);box-shadow:0 4px 12px rgba(61,90,241,0.3);}
-.btn-ghost{background:var(--ok);color:#fff;font-weight:700;}
-.btn-ghost:hover{filter:brightness(1.08);box-shadow:0 4px 12px rgba(26,158,107,0.3);}
+.btn-ghost{background:var(--brand-tint);color:var(--brand-deep);}
+.btn-ghost:hover{filter:brightness(0.98);}
+.btn-secondary{background:var(--ok);color:#fff;font-weight:700;}
+.btn-secondary:hover{filter:brightness(1.08);box-shadow:0 4px 12px rgba(26,158,107,0.3);}
 .btn-danger{background:var(--danger);color:#fff;font-weight:700;}
 .btn-danger:hover{filter:brightness(1.08);box-shadow:0 4px 12px rgba(224,69,60,0.3);}
 .btn-sm{padding:0.35rem 0.6rem;font-size:0.76rem;border-radius:7px;}
