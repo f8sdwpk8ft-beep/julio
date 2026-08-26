@@ -36,3 +36,13 @@ Este site guarda tudo no `localStorage` do navegador — ou seja, os dados ficam
 - Não há backup automático fora do navegador.
 
 Se precisar que os dados fiquem centralizados (todo mundo vendo a mesma coisa, de qualquer aparelho), é necessário adicionar um banco de dados e um backend — nesse caso é só pedir para eu implementar antes de subir.
+
+## Migrando dados de teste para a Hostinger
+
+Se você cadastrou clientes/produtos/vendas de teste em outra versão (por exemplo, no link de artifact usado para ajustar o visual), use os botões no rodapé do menu lateral:
+
+1. Na versão de testes, clique em **Exportar dados** — baixa um arquivo `gestao-simples-dados-AAAA-MM-DD.json` com tudo cadastrado.
+2. Depois de subir esta pasta na Hostinger e abrir o site, clique em **Importar dados** e selecione esse arquivo `.json`.
+3. Confirme a substituição — os dados exportados passam a valer no site publicado.
+
+Importar sempre **substitui** todos os dados atuais do site (não soma/mescla), então use com um arquivo de exportação correto.
