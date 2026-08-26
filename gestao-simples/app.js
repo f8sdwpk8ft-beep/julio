@@ -542,17 +542,49 @@
 
   // ================= DASHBOARD =================
   // Estado só de sessão (não é salvo): a cada carregamento/atualização da
-  // página os valores voltam a ficar ocultos por padrão.
+  // página os valores voltam a ficar ocultos por padrão, exigindo a senha
+  // de novo para revelar.
   var valoresVisiveis = false;
+  var ADMIN_CODE = "1518";
   var EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
   var EYE_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c7 0 10.5 7 10.5 7a13.2 13.2 0 0 1-3.1 4.1M6.5 6.6C3.4 8.5 1.5 12 1.5 12S5 19 12 19a10.6 10.6 0 0 0 4.2-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+  var LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+
+  function pedirSenhaAdmin(onSuccess){
+    openModal("Área protegida", (
+      '<div class="field"><label>Senha</label><input id="fSenhaAdmin" type="password" inputmode="numeric" placeholder="Digite a senha"></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnConfirmarSenha">Confirmar</button></div>'
+    ), function(body){
+      var input = body.querySelector("#fSenhaAdmin");
+      input.focus();
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      function tentar(){
+        if(input.value === ADMIN_CODE){
+          closeModal();
+          onSuccess();
+        } else {
+          toast("Senha incorreta");
+        }
+      }
+      body.querySelector("#btnConfirmarSenha").addEventListener("click", tentar);
+      input.addEventListener("keydown", function(e){ if(e.key === "Enter") tentar(); });
+    });
+  }
 
   function toggleValoresVisiveis(){
-    valoresVisiveis = !valoresVisiveis;
-    renderDashboard();
+    if(valoresVisiveis){
+      valoresVisiveis = false;
+      renderDashboard();
+    } else {
+      pedirSenhaAdmin(function(){
+        valoresVisiveis = true;
+        renderDashboard();
+      });
+    }
   }
   document.getElementById("eyeVendas").addEventListener("click", toggleValoresVisiveis);
   document.getElementById("eyeDespesas").addEventListener("click", toggleValoresVisiveis);
+  document.getElementById("eyeTotalLoja").addEventListener("click", toggleValoresVisiveis);
 
   // ---------- Gráficos mensais (SVG, sem dependências) ----------
   var MESES_ABREV = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
@@ -644,6 +676,13 @@
   }
 
   function renderGraficos(){
+    if(!valoresVisiveis){
+      var lockedHtml = '<div class="chart-locked">' + LOCK_SVG + '<span>Protegido — clique no olho para ver</span></div>';
+      document.getElementById("chartVendasDespesas").innerHTML = lockedHtml;
+      document.getElementById("chartCrescimento").innerHTML = lockedHtml;
+      return;
+    }
+
     var dados = totaisMensais();
     var labels = dados.map(function(d){ return d.label; });
 
@@ -671,7 +710,15 @@
     document.getElementById("kpiPagar").textContent = valoresVisiveis ? brl(sum(pagarPendente)) : "R$ ••••";
     document.getElementById("kpiPagarQtd").textContent = pagarPendente.length + " pendentes";
 
-    [document.getElementById("eyeVendas"), document.getElementById("eyeDespesas")].forEach(function(btn){
+    var totalVendasGeral = sum(state.vendas.map(function(v){ return { valor: v.total }; }));
+    var totalDespesasGeral = sum(state.contas.filter(function(c){ return c.tipo === "pagar"; }));
+    var totalLoja = totalVendasGeral - totalDespesasGeral;
+    var totalLojaEl = document.getElementById("kpiTotalLoja");
+    totalLojaEl.textContent = valoresVisiveis ? brl(totalLoja) : "R$ ••••";
+    totalLojaEl.classList.remove("kpi-value-green", "kpi-value-red");
+    if(valoresVisiveis) totalLojaEl.classList.add(totalLoja >= 0 ? "kpi-value-green" : "kpi-value-red");
+
+    [document.getElementById("eyeVendas"), document.getElementById("eyeDespesas"), document.getElementById("eyeTotalLoja")].forEach(function(btn){
       btn.innerHTML = valoresVisiveis ? EYE_OPEN_SVG : EYE_OFF_SVG;
       btn.setAttribute("aria-pressed", valoresVisiveis ? "true" : "false");
       btn.setAttribute("aria-label", valoresVisiveis ? "Ocultar valor" : "Mostrar valor");
