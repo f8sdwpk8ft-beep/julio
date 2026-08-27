@@ -3,7 +3,7 @@
 
   var STORAGE_KEY = "gestao-simples-data-v1";
 
-  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], assistencias: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], vendedores: [], comissaoPercentual: 2, nomeLoja: "" };
+  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], assistencias: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], categorias: ["Produtos", "Assistência Técnica"], vendedores: [], comissaoPercentual: 2, nomeLoja: "" };
 
   function loadData(){
     try{
@@ -140,7 +140,7 @@
     tbody.innerHTML = list.map(function(c){
       return '<tr>' +
         '<td class="cell-strong">' + esc(c.nome) + '</td>' +
-        '<td>' + esc(c.cpf || "-") + '</td>' +
+        '<td>' + esc(c.cpf || c.cnpj || "-") + '</td>' +
         '<td>' + esc(c.telefone || "-") + '</td>' +
         '<td>' + esc(c.email || "-") + '</td>' +
         '<td>' + esc(c.obs || "-") + '</td>' +
@@ -155,9 +155,10 @@
   function clienteForm(cliente){
     cliente = cliente || {};
     return (
+      '<div class="field"><label>Nome</label><input id="fNome" value="' + esc(cliente.nome||"") + '" placeholder="Nome do cliente"></div>' +
       '<div class="field-row">' +
-        '<div class="field"><label>Nome</label><input id="fNome" value="' + esc(cliente.nome||"") + '" placeholder="Nome do cliente"></div>' +
         '<div class="field"><label>CPF</label><input id="fCpf" value="' + esc(cliente.cpf||"") + '" placeholder="000.000.000-00"></div>' +
+        '<div class="field"><label>CNPJ</label><input id="fCnpj" value="' + esc(cliente.cnpj||"") + '" placeholder="00.000.000/0000-00"></div>' +
       '</div>' +
       '<div class="field-row">' +
         '<div class="field"><label>Telefone</label><input id="fTelefone" value="' + esc(cliente.telefone||"") + '" placeholder="(00) 00000-0000"></div>' +
@@ -178,6 +179,7 @@
         var data = {
           nome: nome,
           cpf: body.querySelector("#fCpf").value.trim(),
+          cnpj: body.querySelector("#fCnpj").value.trim(),
           telefone: body.querySelector("#fTelefone").value.trim(),
           email: body.querySelector("#fEmail").value.trim(),
           obs: body.querySelector("#fObs").value.trim()
@@ -226,7 +228,7 @@
         '<td class="cell-strong">' + esc(p.nome) + '</td>' +
         '<td>' + esc(p.categoria || "-") + '</td>' +
         '<td>' + brl(p.preco) + '</td>' +
-        '<td>' + brl(p.custo) + '</td>' +
+        '<td>' + (custoVisivel ? brl(p.custo) : '<span class="valor-oculto">R$ &bull;&bull;&bull;&bull;</span>') + '</td>' +
         '<td>' + p.estoque + '</td>' +
         '<td class="cell-actions">' +
           '<button class="btn btn-ghost btn-sm" data-edit-produto="' + p.id + '">Editar</button>' +
@@ -240,7 +242,10 @@
     p = p || {};
     return (
       '<div class="field"><label>Nome</label><input id="fNome" value="' + esc(p.nome||"") + '" placeholder="Nome do produto"></div>' +
-      '<div class="field"><label>Categoria</label><input id="fCategoria" value="' + esc(p.categoria||"") + '"></div>' +
+      '<div class="field"><label>Categoria</label><div style="display:flex;gap:0.4rem;">' +
+        '<select id="fCategoria" style="flex:1;">' + categoriaOptionsHtml(p.categoria) + '</select>' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="btnNovaCategoria" title="Adicionar categoria">+</button>' +
+      '</div></div>' +
       '<div class="field-row">' +
         '<div class="field"><label>Preço de venda</label><input id="fPreco" type="number" min="0" step="0.01" value="' + (p.preco != null ? p.preco : "") + '"></div>' +
         '<div class="field"><label>Custo</label><input id="fCusto" type="number" min="0" step="0.01" value="' + (p.custo != null ? p.custo : "") + '"></div>' +
@@ -254,6 +259,17 @@
     var p = id ? state.produtos.find(function(x){ return x.id === id; }) : null;
     openModal(p ? "Editar produto" : "Novo produto", produtoForm(p), function(body){
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelector("#btnNovaCategoria").addEventListener("click", function(){
+        var nome = prompt("Nome da nova categoria:");
+        if(!nome) return;
+        nome = nome.trim();
+        if(!nome) return;
+        if(state.categorias.indexOf(nome) === -1){
+          state.categorias.push(nome);
+          saveData();
+        }
+        body.querySelector("#fCategoria").innerHTML = categoriaOptionsHtml(nome);
+      });
       body.querySelector("#btnSave").addEventListener("click", function(){
         var nome = body.querySelector("#fNome").value.trim();
         if(!nome){ toast("Informe o nome do produto"); return; }
@@ -313,10 +329,9 @@
     }
     tbody.innerHTML = list.map(function(v){
       var itensResumo = v.itens.map(function(i){ return i.qtd + "x " + i.nome; }).join(", ");
-      var badgeAssist = v.assistencia ? ' <span class="badge badge-muted">Assistência</span>' : "";
-      return '<tr>' +
+      return '<tr' + (v.devolvida ? ' class="linha-devolvida"' : '') + '>' +
         '<td>' + fmtDate(v.data) + '</td>' +
-        '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + badgeAssist + '</td>' +
+        '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + selosVenda(v) + '</td>' +
         '<td>' + esc(itensResumo) + '</td>' +
         '<td>' + esc(pagamentoResumoLabel(v)) + '</td>' +
         '<td class="cell-strong">' + brl(v.total) + '</td>' +
@@ -345,13 +360,14 @@
 
   function filtrarVendasPorPeriodo(filtro, dataCustom, rangeInicio, rangeFim){
     var hoje = todayISO();
-    if(filtro === "data") return state.vendas.filter(function(v){ return v.data === (dataCustom || hoje); });
-    if(filtro === "ontem") return state.vendas.filter(function(v){ return v.data === diaAnterior(hoje); });
-    if(filtro === "mes") return state.vendas.filter(function(v){ return v.data.slice(0,7) === hoje.slice(0,7); });
-    if(filtro === "ano") return state.vendas.filter(function(v){ return v.data.slice(0,4) === hoje.slice(0,4); });
-    if(filtro === "custom") return state.vendas.filter(function(v){ return v.data >= rangeInicio && v.data <= rangeFim; });
-    if(filtro === "tudo") return state.vendas.slice();
-    return state.vendas.filter(function(v){ return v.data === hoje; });
+    var base = vendasAtivas();
+    if(filtro === "data") return base.filter(function(v){ return v.data === (dataCustom || hoje); });
+    if(filtro === "ontem") return base.filter(function(v){ return v.data === diaAnterior(hoje); });
+    if(filtro === "mes") return base.filter(function(v){ return v.data.slice(0,7) === hoje.slice(0,7); });
+    if(filtro === "ano") return base.filter(function(v){ return v.data.slice(0,4) === hoje.slice(0,4); });
+    if(filtro === "custom") return base.filter(function(v){ return v.data >= rangeInicio && v.data <= rangeFim; });
+    if(filtro === "tudo") return base.slice();
+    return base.filter(function(v){ return v.data === hoje; });
   }
 
   function filtrarDespesasPorPeriodo(filtro, rangeInicio, rangeFim){
@@ -370,7 +386,7 @@
     }
     return (
       '<div class="vd-filtros">' +
-        chip("hoje", "Hoje") + chip("ontem", "Ontem") + chip("mes", "Este mês") + chip("ano", "Este ano") +
+        chip("hoje", "Hoje") + chip("ontem", "Ontem") + chip("mes", "Este mês") + chip("ano", "Este ano") + chip("tudo", "Todo o histórico") +
       '</div>' +
       '<div class="field"><label>Ou escolha um dia</label><input type="date" id="vdData" value="' + (dataCustom || todayISO()) + '"></div>' +
       '<div class="vd-lista-wrap table-wrap">' +
@@ -406,6 +422,17 @@
     return "Dividido (" + linhas.length + " formas)";
   }
 
+  function selosVenda(v){
+    return (v.assistencia ? ' <span class="badge badge-muted">Assistência</span>' : "") +
+           (v.devolvida ? ' <span class="badge badge-danger">Devolvida</span>' : "");
+  }
+
+  // Vendas devolvidas continuam no histórico, mas saem de todo cálculo
+  // (caixa, fechamentos, comissões e gráficos).
+  function vendasAtivas(){
+    return state.vendas.filter(function(v){ return !v.devolvida; });
+  }
+
   function resumoPorPagamento(lista){
     return METODOS_PAGAMENTO.concat(["Pagamento futuro"]).map(function(m){
       var total = 0;
@@ -429,8 +456,10 @@
     return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
   }
 
-  function abrirDetalhesVendas(){
-    var estadoFiltro = { filtro: "hoje", data: todayISO() };
+  function abrirDetalhesVendas(filtroInicial){
+    // Também é usada como callback de clique, então só aceita filtro em texto.
+    var filtro = typeof filtroInicial === "string" ? filtroInicial : "hoje";
+    var estadoFiltro = { filtro: filtro, data: todayISO() };
 
     openModal("Vendas", vendasDetalheHtml(estadoFiltro.filtro, estadoFiltro.data), function(body){
       function renderLista(){
@@ -754,7 +783,7 @@
 
   function abrirVendasHoje(){
     var hoje = todayISO();
-    var vendasHoje = state.vendas.filter(function(v){ return v.data === hoje; });
+    var vendasHoje = vendasAtivas().filter(function(v){ return v.data === hoje; });
 
     openModal("Vendas de hoje", vendasDetalheHtml("data", hoje), function(body){
       function renderLista(){
@@ -828,17 +857,18 @@
   }
 
   // ---------- Combobox de produto (busca ao digitar), reutilizável em qualquer formulário ----------
-  function comboProdutoHtml(produtoIdAtual, produtoNomeAtual){
+  function comboProdutoHtml(produtoIdAtual, produtoNomeAtual, permitirLivre){
+    var ph = permitirLivre ? "Buscar no estoque ou escrever a peça..." : "Digite para buscar produto...";
     return (
       '<div class="combo-wrap">' +
         '<input type="hidden" class="v-produto-id" value="' + (produtoIdAtual || "") + '">' +
-        '<input type="text" class="v-produto-busca" placeholder="Digite para buscar produto..." autocomplete="off" value="' + esc(produtoNomeAtual || "") + '">' +
+        '<input type="text" class="v-produto-busca" placeholder="' + ph + '" autocomplete="off" value="' + esc(produtoNomeAtual || "") + '">' +
         '<div class="combo-dropdown hidden"></div>' +
       '</div>'
     );
   }
 
-  function bindComboProduto(container, onSelect){
+  function bindComboProduto(container, onSelect, permitirLivre){
     var buscaInput = container.querySelector(".v-produto-busca");
     var idInput = container.querySelector(".v-produto-id");
     var dd = container.querySelector(".combo-dropdown");
@@ -849,7 +879,9 @@
         return !termoLower || p.nome.toLowerCase().indexOf(termoLower) !== -1;
       }).slice(0, 30);
       dd.innerHTML = matches.length === 0
-        ? '<div class="combo-empty">Nenhum produto encontrado</div>'
+        ? '<div class="combo-empty">' + (permitirLivre
+            ? 'Sem esse item no estoque — pode escrever o nome e informar o valor à mão.'
+            : 'Nenhum produto encontrado') + '</div>'
         : matches.map(function(p){
             return '<div class="combo-item" data-produto-id="' + p.id + '">' + esc(p.nome) +
               ' <span class="combo-item-sub">(' + p.estoque + ' em estoque · ' + brl(p.preco) + ')</span></div>';
@@ -1212,6 +1244,102 @@
   document.getElementById("btnNovaVenda").addEventListener("click", function(){ openVendaModal(); });
   document.getElementById("buscaVendas").addEventListener("input", function(e){ renderVendas(e.target.value); });
 
+  // ---------- Devoluções ----------
+  function abrirDevolucoes(){
+    var elegiveis = state.vendas.filter(function(v){ return !v.devolvida; })
+      .slice().sort(function(a,b){ return (b.criadoEm || b.data).localeCompare(a.criadoEm || a.data); });
+
+    var linhas = elegiveis.length === 0
+      ? '<tr class="empty-row"><td colspan="5">Nenhuma venda disponível para devolução.</td></tr>'
+      : elegiveis.map(function(v){
+          return '<tr>' +
+            '<td>' + fmtDate(v.data) + '</td>' +
+            '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + selosVenda(v) + '</td>' +
+            '<td>' + esc(v.itens.map(function(i){ return i.qtd + "x " + i.nome; }).join(", ")) + '</td>' +
+            '<td class="cell-strong">' + brl(v.total) + '</td>' +
+            '<td class="cell-actions"><button class="btn btn-danger btn-sm" data-devolver="' + v.id + '">Devolver</button></td>' +
+          '</tr>';
+        }).join("");
+
+    openModal("Devoluções", (
+      '<p style="margin:0 0 1rem;color:var(--ink-dim);">Escolha a venda que o cliente devolveu. A venda inteira sai do caixa, dos fechamentos e das comissões.</p>' +
+      '<div class="vd-lista-wrap table-wrap">' +
+        '<table><thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Total</th><th></th></tr></thead>' +
+        '<tbody id="devTbody">' + linhas + '</tbody></table>' +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Fechar</button></div>'
+    ), function(body){
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelector("#devTbody").addEventListener("click", function(e){
+        var btn = e.target.closest("[data-devolver]");
+        if(btn) confirmarDevolucao(btn.dataset.devolver);
+      });
+    }, { large: true });
+  }
+
+  function confirmarDevolucao(vendaId){
+    var v = state.vendas.find(function(x){ return x.id === vendaId; });
+    if(!v) return;
+    var temItemDeEstoque = v.itens.some(function(i){ return i.produtoId; });
+    var pct = Number(state.comissaoPercentual) || 0;
+    var comissaoPerdida = v.vendedor ? v.total * (pct / 100) : 0;
+
+    openModal("Confirmar devolução", (
+      '<div class="fechamento-detalhes" style="margin-bottom:1rem;">' +
+        '<div class="fechamento-detalhes-row"><span>Cliente</span><span>' + esc(clienteNome(v.clienteId)) + '</span></div>' +
+        '<div class="fechamento-detalhes-row"><span>Data da venda</span><span>' + fmtDate(v.data) + '</span></div>' +
+        (v.vendedor ? '<div class="fechamento-detalhes-row"><span>Vendedor</span><span>' + esc(v.vendedor) + '</span></div>' : "") +
+        v.itens.map(function(i){
+          return '<div class="fechamento-detalhes-row"><span>' + i.qtd + 'x ' + esc(i.nome) + '</span><span>' + brl(i.qtd * i.precoUnit) + '</span></div>';
+        }).join("") +
+        '<div class="fechamento-detalhes-row" style="font-weight:700;color:var(--danger);"><span>Valor a devolver</span><span>' + brl(v.total) + '</span></div>' +
+        (comissaoPerdida > 0 ? '<div class="fechamento-detalhes-row"><span>Comissão que será estornada</span><span>- ' + brl(comissaoPerdida) + '</span></div>' : "") +
+      '</div>' +
+      (temItemDeEstoque
+        ? '<div class="field"><label class="checkbox-inline"><input type="checkbox" id="fDevolverEstoque" checked> Devolver as mercadorias ao estoque</label>' +
+          '<div class="cell-sub" style="margin-top:0.3rem;">Desmarque se a mercadoria voltou com defeito e não pode ser revendida.</div></div>'
+        : '') +
+      '<div class="modal-actions">' +
+        '<button class="btn btn-ghost" id="btnCancel">Cancelar</button>' +
+        '<button class="btn btn-danger" id="btnConfirmarDevolucao">Confirmar devolução</button>' +
+      '</div>'
+    ), function(body){
+      body.querySelector("#btnCancel").addEventListener("click", abrirDevolucoes);
+      body.querySelector("#btnConfirmarDevolucao").addEventListener("click", function(){
+        var voltarEstoque = temItemDeEstoque && body.querySelector("#fDevolverEstoque").checked;
+        if(voltarEstoque) restaurarEstoqueItens(v.itens);
+
+        v.devolvida = true;
+        v.devolvidoEm = new Date().toISOString();
+        v.estoqueRestaurado = voltarEstoque;
+
+        // Se a venda tinha "Pagamento futuro", a cobrança pendente deixa de existir.
+        state.contas = state.contas.filter(function(c){ return c.vendaId !== v.id; });
+        // Uma assistência devolvida volta a ficar pendente para não sumir do controle.
+        if(v.origemAssistenciaId){
+          var a = state.assistencias.find(function(x){ return x.id === v.origemAssistenciaId; });
+          if(a){ a.status = "pendente"; a.vendaId = null; }
+        }
+
+        saveData();
+        closeModal();
+        renderAll();
+        toast("Devolução registrada — a venda saiu do caixa e das comissões");
+      });
+    });
+  }
+
+  document.getElementById("btnDevolucao").addEventListener("click", abrirDevolucoes);
+
+  // Dashboard: "Últimas vendas" leva ao histórico completo e cada linha abre a venda
+  document.getElementById("btnHistoricoVendas").addEventListener("click", function(){
+    abrirDetalhesVendas("tudo");
+  });
+  document.getElementById("tblUltimasVendas").addEventListener("click", function(e){
+    var row = e.target.closest("[data-uv-venda]");
+    if(row) abrirDetalheVenda(row.dataset.uvVenda);
+  });
+
   // ---------- Filtro de período (calendário: clique no dia inicial, depois no final) ----------
   // Reutilizável: cada chamada cria seu próprio calendário independente, ligado
   // a um botão/popover específicos, avisando o chamador via onAplicar/onLimpar.
@@ -1361,8 +1489,21 @@
   });
 
   // ================= ASSISTÊNCIA TÉCNICA =================
+  function assistenciaItensTotal(a){
+    return (a.itens || []).reduce(function(s,i){ return s + i.qtd * i.precoUnit; }, 0);
+  }
+
   function assistenciaTotal(a){
-    return (a.maoDeObra || 0) + (a.itens || []).reduce(function(s,i){ return s + i.qtd * i.precoUnit; }, 0);
+    // maoDeObra só existe em registros antigos; hoje o serviço entra como item.
+    var bruto = (a.maoDeObra || 0) + assistenciaItensTotal(a);
+    return Math.max(0, bruto - (a.desconto || 0));
+  }
+
+  function assistenciaDescricao(a){
+    if(a.aparelho || a.servico){
+      return [a.aparelho, a.servico].filter(Boolean).join(" — ");
+    }
+    return a.descricao || "-";
   }
 
   function restaurarEstoqueItens(itens){
@@ -1379,16 +1520,31 @@
     });
   }
 
+  // Linha de peça/produto da assistência: aceita item do estoque ou escrito à mão.
+  function assistFormRow(item, idx){
+    var produtoAtual = item && item.produtoId ? state.produtos.find(function(p){ return p.id === item.produtoId; }) : null;
+    var nomeAtual = produtoAtual ? produtoAtual.nome : (item ? item.nome : "");
+    return (
+      '<div class="venda-item-row" data-row="' + idx + '">' +
+        comboProdutoHtml(item ? item.produtoId : "", nomeAtual, true) +
+        '<input class="v-qtd" type="number" min="1" value="' + (item ? item.qtd : 1) + '">' +
+        '<input class="v-preco" type="number" min="0" step="0.01" value="' + (item ? item.precoUnit : 0) + '">' +
+        '<button type="button" class="btn btn-icon btn-danger v-remove" title="Remover">&times;</button>' +
+      '</div>'
+    );
+  }
+
   function assistenciaForm(a){
     a = a || {};
     var btnSaveText = a.id ? "Atualizar" : "Salvar";
     var itensRows = (a.itens && a.itens.length ? a.itens : [null]).map(function(item, idx){
-      return vendaFormRow(item, idx);
+      return assistFormRow(item, idx);
     }).join("");
+    var desconto = a.desconto || 0;
     return (
       '<div class="field-row">' +
         '<div class="field"><label>Cliente</label><div style="display:flex;gap:0.4rem;">' +
-          '<select id="fAssistCliente" style="flex:1;">' + clienteOptionsHtml(a.clienteId) + '</select>' +
+          '<select id="fAssistCliente" style="flex:1;">' + clienteOptionsHtml(a.clienteId, "Consumidor") + '</select>' +
           '<button type="button" class="btn btn-ghost btn-sm" id="btnNovoClienteAssistInline" title="Cadastrar cliente">+</button>' +
         '</div></div>' +
         '<div class="field"><label>Vendedor</label><div style="display:flex;gap:0.4rem;">' +
@@ -1396,17 +1552,26 @@
           '<button type="button" class="btn btn-ghost btn-sm" id="btnNovoVendedorAssistInline" title="Adicionar vendedor">+</button>' +
         '</div></div>' +
       '</div>' +
-      '<div class="field"><label>Aparelho / Serviço</label><input id="fAssistDescricao" value="' + esc(a.descricao||"") + '" placeholder="Ex: Troca de tela iPhone 11"></div>' +
-      '<div class="field"><label>Peças / produtos utilizados (opcional)</label></div>' +
+      '<div class="field"><label>Aparelho</label><input id="fAssistAparelho" value="' + esc(a.aparelho || a.descricao || "") + '" placeholder="Ex: iPhone 11"></div>' +
+      '<div class="field"><label>Serviço</label><input id="fAssistServico" value="' + esc(a.servico || "") + '" placeholder="Ex: Troca de tela"></div>' +
+      '<div class="field"><label>Peças / produtos utilizados</label></div>' +
       '<div class="venda-items" id="assistItems">' +
         '<div id="assistRows">' + itensRows + '</div>' +
         '<button type="button" class="btn btn-ghost btn-sm" id="btnAddAssistItem" style="margin-top:0.4rem;">+ Adicionar peça/produto</button>' +
       '</div>' +
       '<div class="field-row">' +
-        '<div class="field"><label>Mão de obra</label><input id="fAssistMaoDeObra" type="number" min="0" step="0.01" value="' + (a.maoDeObra || "") + '"></div>' +
+        '<div class="field">' +
+          '<label>Desconto (R$)</label>' +
+          '<div style="display:flex;gap:0.4rem;">' +
+            '<input id="fAssistDesconto" type="number" min="0" step="0.01" value="' + desconto + '" disabled style="flex:1;">' +
+            '<button type="button" class="btn btn-ghost btn-sm" id="btnLiberarDescontoAssist" title="Somente o vendedor pode liberar">Liberar</button>' +
+          '</div>' +
+        '</div>' +
         '<div class="field"><label>Data de entrada</label><input id="fAssistData" type="date" value="' + (a.dataEntrada || todayISO()) + '"></div>' +
       '</div>' +
       '<div class="venda-total-box">' +
+        '<div class="venda-total-linha"><span>Peças / produtos</span><span id="assistSubtotalValor">R$ 0,00</span></div>' +
+        '<div class="venda-total-linha ' + (desconto > 0 ? "" : "hidden") + '" id="assistDescontoLinha"><span>Desconto</span><span id="assistDescontoValor">- R$ 0,00</span></div>' +
         '<div class="venda-total-linha venda-total-final"><span>Total previsto</span><span id="assistTotalValor">R$ 0,00</span></div>' +
       '</div>' +
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">' + btnSaveText + '</button></div>'
@@ -1419,22 +1584,30 @@
       var rowsEl = body.querySelector("#assistRows");
       var rowCount = rowsEl.querySelectorAll(".venda-item-row").length;
 
-      function recalcTotal(){
-        var somaItens = 0;
+      function subtotalAtual(){
+        var total = 0;
         rowsEl.querySelectorAll(".venda-item-row").forEach(function(row){
           var qtd = parseFloat(row.querySelector(".v-qtd").value) || 0;
           var preco = parseFloat(row.querySelector(".v-preco").value) || 0;
-          somaItens += qtd * preco;
+          total += qtd * preco;
         });
-        var maoDeObra = parseFloat(body.querySelector("#fAssistMaoDeObra").value) || 0;
-        body.querySelector("#assistTotalValor").textContent = brl(somaItens + maoDeObra);
+        return total;
+      }
+
+      function recalcTotal(){
+        var subtotal = subtotalAtual();
+        var desconto = Math.min(parseFloat(body.querySelector("#fAssistDesconto").value) || 0, subtotal);
+        body.querySelector("#assistSubtotalValor").textContent = brl(subtotal);
+        body.querySelector("#assistDescontoValor").textContent = "- " + brl(desconto);
+        body.querySelector("#assistDescontoLinha").classList.toggle("hidden", desconto <= 0);
+        body.querySelector("#assistTotalValor").textContent = brl(Math.max(0, subtotal - desconto));
       }
 
       function bindRow(row){
         bindComboProduto(row, function(prod){
           row.querySelector(".v-preco").value = prod.preco;
           recalcTotal();
-        });
+        }, true);
         row.querySelector(".v-qtd").addEventListener("input", recalcTotal);
         row.querySelector(".v-preco").addEventListener("input", recalcTotal);
         row.querySelector(".v-remove").addEventListener("click", function(){
@@ -1448,13 +1621,25 @@
 
       body.querySelector("#btnAddAssistItem").addEventListener("click", function(){
         var div = document.createElement("div");
-        div.innerHTML = vendaFormRow(null, rowCount++);
+        div.innerHTML = assistFormRow(null, rowCount++);
         var row = div.firstElementChild;
         rowsEl.appendChild(row);
         bindRow(row);
       });
 
-      body.querySelector("#fAssistMaoDeObra").addEventListener("input", recalcTotal);
+      body.querySelector("#btnLiberarDescontoAssist").addEventListener("click", function(){
+        var senha = prompt("Senha do vendedor para liberar o desconto:");
+        if(senha === null) return;
+        if(senha === SELLER_DISCOUNT_CODE){
+          var input = body.querySelector("#fAssistDesconto");
+          input.disabled = false;
+          input.focus();
+          toast("Desconto liberado");
+        } else {
+          toast("Senha incorreta");
+        }
+      });
+      body.querySelector("#fAssistDesconto").addEventListener("input", recalcTotal);
       recalcTotal();
 
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
@@ -1464,10 +1649,10 @@
         if(!nome) return;
         nome = nome.trim();
         if(!nome) return;
-        var novoCliente = { id: uid(), nome: nome, cpf: "", telefone: "", email: "", obs: "" };
+        var novoCliente = { id: uid(), nome: nome, cpf: "", cnpj: "", telefone: "", email: "", obs: "" };
         state.clientes.push(novoCliente);
         saveData();
-        body.querySelector("#fAssistCliente").innerHTML = clienteOptionsHtml(novoCliente.id);
+        body.querySelector("#fAssistCliente").innerHTML = clienteOptionsHtml(novoCliente.id, "Consumidor");
         toast("Cliente cadastrado");
       });
 
@@ -1484,30 +1669,39 @@
       });
 
       body.querySelector("#btnSave").addEventListener("click", function(){
-        var clienteId = body.querySelector("#fAssistCliente").value;
+        var clienteId = body.querySelector("#fAssistCliente").value || null;
         var vendedor = body.querySelector("#fAssistVendedor").value || null;
-        var descricao = body.querySelector("#fAssistDescricao").value.trim();
-        var maoDeObra = parseFloat(body.querySelector("#fAssistMaoDeObra").value) || 0;
+        var aparelho = body.querySelector("#fAssistAparelho").value.trim();
+        var servico = body.querySelector("#fAssistServico").value.trim();
         var dataEntrada = body.querySelector("#fAssistData").value || todayISO();
 
-        if(!clienteId){ toast("Selecione o cliente"); return; }
-        if(!descricao){ toast("Descreva o aparelho ou serviço"); return; }
+        if(!aparelho){ toast("Informe o aparelho"); return; }
 
         var itensNovos = [];
         rowsEl.querySelectorAll(".venda-item-row").forEach(function(row){
           var produtoId = row.querySelector(".v-produto-id").value;
+          var nomeLivre = row.querySelector(".v-produto-busca").value.trim();
           var qtd = parseInt(row.querySelector(".v-qtd").value, 10) || 0;
           var preco = parseFloat(row.querySelector(".v-preco").value) || 0;
-          if(!produtoId || qtd <= 0) return;
-          var prod = state.produtos.find(function(p){ return p.id === produtoId; });
-          if(!prod) return;
-          itensNovos.push({ produtoId: produtoId, nome: prod.nome, qtd: qtd, precoUnit: preco });
+          if(qtd <= 0) return;
+          if(produtoId){
+            var prod = state.produtos.find(function(p){ return p.id === produtoId; });
+            if(!prod) return;
+            itensNovos.push({ produtoId: produtoId, nome: prod.nome, qtd: qtd, precoUnit: preco });
+          } else if(nomeLivre && preco > 0){
+            // peça que não existe no estoque: entra só no valor, sem baixa
+            itensNovos.push({ produtoId: null, nome: nomeLivre, qtd: qtd, precoUnit: preco });
+          }
         });
 
-        if(itensNovos.length === 0 && maoDeObra <= 0){ toast("Informe a mão de obra ou adicione ao menos uma peça"); return; }
+        var subtotal = itensNovos.reduce(function(s,i){ return s + i.qtd * i.precoUnit; }, 0);
+        var desconto = Math.min(parseFloat(body.querySelector("#fAssistDesconto").value) || 0, subtotal);
+
+        if(itensNovos.length === 0){ toast("Adicione ao menos uma peça, produto ou serviço com valor"); return; }
 
         if(isEdit) restaurarEstoqueItens(a.itens);
         var faltouEstoque = itensNovos.find(function(i){
+          if(!i.produtoId) return false;
           var p = state.produtos.find(function(p){ return p.id === i.produtoId; });
           return p && i.qtd > p.estoque;
         });
@@ -1522,19 +1716,23 @@
         if(isEdit){
           a.clienteId = clienteId;
           a.vendedor = vendedor;
-          a.descricao = descricao;
+          a.aparelho = aparelho;
+          a.servico = servico;
           a.itens = itensNovos;
-          a.maoDeObra = maoDeObra;
+          a.desconto = desconto;
           a.dataEntrada = dataEntrada;
+          delete a.descricao;
+          delete a.maoDeObra;
           toast("Assistência atualizada");
         } else {
           state.assistencias.push({
             id: uid(),
             clienteId: clienteId,
             vendedor: vendedor,
-            descricao: descricao,
+            aparelho: aparelho,
+            servico: servico,
             itens: itensNovos,
-            maoDeObra: maoDeObra,
+            desconto: desconto,
             dataEntrada: dataEntrada,
             status: "pendente",
             vendaId: null
@@ -1553,7 +1751,8 @@
   function abrirConfirmarRetiradaAssistencia(assistId){
     var a = state.assistencias.find(function(x){ return x.id === assistId; });
     if(!a) return;
-    var somaItens = (a.itens || []).reduce(function(s,i){ return s + i.qtd * i.precoUnit; }, 0);
+    var subtotal = (a.maoDeObra || 0) + assistenciaItensTotal(a);
+    var descontoAtual = a.desconto || 0;
     var itensHtml = (a.itens || []).length
       ? '<div class="fechamento-detalhes" style="margin-bottom:1rem;">' +
           a.itens.map(function(i){
@@ -1563,11 +1762,18 @@
       : "";
     var formas = ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix"];
     openModal("Confirmar retirada", (
-      '<p style="margin:0 0 1rem;color:var(--ink-dim);">' + esc(clienteNome(a.clienteId)) + ' retirou: ' + esc(a.descricao) + '</p>' +
+      '<p style="margin:0 0 1rem;color:var(--ink-dim);">' + esc(clienteNome(a.clienteId)) + ' retirou: ' + esc(assistenciaDescricao(a)) + '</p>' +
       itensHtml +
-      '<div class="field"><label>Mão de obra</label><input id="fAssistMaoDeObraFinal" type="number" min="0" step="0.01" value="' + (a.maoDeObra || 0) + '"></div>' +
+      '<div class="field">' +
+        '<label>Desconto (R$)</label>' +
+        '<div style="display:flex;gap:0.4rem;">' +
+          '<input id="fAssistDescontoFinal" type="number" min="0" step="0.01" value="' + descontoAtual + '" disabled style="flex:1;">' +
+          '<button type="button" class="btn btn-ghost btn-sm" id="btnLiberarDescontoRetirada">Liberar</button>' +
+        '</div>' +
+      '</div>' +
       '<div class="venda-total-box">' +
-        '<div class="venda-total-linha venda-total-final"><span>Total a cobrar</span><span id="assistRetiradaTotal">' + brl(somaItens + (a.maoDeObra || 0)) + '</span></div>' +
+        '<div class="venda-total-linha"><span>Peças / produtos</span><span>' + brl(subtotal) + '</span></div>' +
+        '<div class="venda-total-linha venda-total-final"><span>Total a cobrar</span><span id="assistRetiradaTotal">' + brl(Math.max(0, subtotal - descontoAtual)) + '</span></div>' +
       '</div>' +
       '<div class="field" style="margin-top:1rem;"><label>Forma de pagamento</label></div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem;">' +
@@ -1575,23 +1781,37 @@
       '</div>' +
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button></div>'
     ), function(body){
+      function descontoFinal(){
+        return Math.min(parseFloat(body.querySelector("#fAssistDescontoFinal").value) || 0, subtotal);
+      }
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
-      body.querySelector("#fAssistMaoDeObraFinal").addEventListener("input", function(){
-        var maoDeObraFinal = parseFloat(body.querySelector("#fAssistMaoDeObraFinal").value) || 0;
-        body.querySelector("#assistRetiradaTotal").textContent = brl(somaItens + maoDeObraFinal);
+      body.querySelector("#btnLiberarDescontoRetirada").addEventListener("click", function(){
+        var senha = prompt("Senha do vendedor para liberar o desconto:");
+        if(senha === null) return;
+        if(senha === SELLER_DISCOUNT_CODE){
+          var input = body.querySelector("#fAssistDescontoFinal");
+          input.disabled = false;
+          input.focus();
+          toast("Desconto liberado");
+        } else {
+          toast("Senha incorreta");
+        }
+      });
+      body.querySelector("#fAssistDescontoFinal").addEventListener("input", function(){
+        body.querySelector("#assistRetiradaTotal").textContent = brl(Math.max(0, subtotal - descontoFinal()));
       });
       body.querySelectorAll("[data-forma-pagto]").forEach(function(btn){
         btn.addEventListener("click", function(){
           var forma = btn.dataset.formaPagto;
-          var maoDeObraFinal = parseFloat(body.querySelector("#fAssistMaoDeObraFinal").value) || 0;
-          var totalFinal = somaItens + maoDeObraFinal;
+          var desconto = descontoFinal();
+          var totalFinal = Math.max(0, subtotal - desconto);
           if(totalFinal <= 0){ toast("Informe um valor válido"); return; }
 
           var itensVenda = (a.itens || []).map(function(i){
             return { produtoId: i.produtoId, nome: i.nome, qtd: i.qtd, precoUnit: i.precoUnit };
           });
-          if(maoDeObraFinal > 0){
-            itensVenda.push({ produtoId: null, nome: "Mão de obra: " + a.descricao, qtd: 1, precoUnit: maoDeObraFinal });
+          if(a.maoDeObra > 0){
+            itensVenda.push({ produtoId: null, nome: "Mão de obra: " + assistenciaDescricao(a), qtd: 1, precoUnit: a.maoDeObra });
           }
 
           var novaVenda = {
@@ -1602,7 +1822,7 @@
             vendedor: a.vendedor,
             itens: itensVenda,
             total: totalFinal,
-            desconto: 0,
+            desconto: desconto,
             pagamento: forma,
             pagamentos: [{ forma: forma, valor: totalFinal }],
             origemAssistenciaId: a.id,
@@ -1610,7 +1830,7 @@
           };
           state.vendas.push(novaVenda);
           a.status = "concluido";
-          a.maoDeObra = maoDeObraFinal;
+          a.desconto = desconto;
           a.vendaId = novaVenda.id;
           saveData();
           closeModal();
@@ -1633,7 +1853,9 @@
     }
     tbody.innerHTML = lista.map(function(a){
       var badge = a.status === "concluido" ? '<span class="badge badge-ok">Concluído</span>' : '<span class="badge badge-warn">Pendente</span>';
-      var descricaoCompleta = esc(a.descricao) + ((a.itens && a.itens.length) ? ' <span class="cell-sub">(' + a.itens.length + ' peça' + (a.itens.length > 1 ? "s" : "") + ')</span>' : "");
+      var qtdPecas = (a.itens || []).length;
+      var descricaoCompleta = esc(assistenciaDescricao(a)) +
+        (qtdPecas ? ' <span class="cell-sub">(' + qtdPecas + (qtdPecas > 1 ? " itens" : " item") + ')</span>' : "");
       return '<tr>' +
         '<td class="cell-strong">' + esc(clienteNome(a.clienteId)) + '</td>' +
         '<td>' + esc(a.vendedor || "-") + '</td>' +
@@ -1719,7 +1941,7 @@
 
     var despesasMes = state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento.slice(0,7) === hoje.slice(0,7); });
     var despesasTotalMes = sum(despesasMes);
-    var vendedMes = state.vendas.filter(function(v){ return v.data.slice(0,7) === hoje.slice(0,7); });
+    var vendedMes = vendasAtivas().filter(function(v){ return v.data.slice(0,7) === hoje.slice(0,7); });
     var totalMes = vendedMes.reduce(function(s,v){ return s + v.total; }, 0);
 
     document.getElementById("kpiTotal").textContent = kpiVisiveis ? brl(totalMes) : "R$ ••••";
@@ -1734,7 +1956,7 @@
       }
     });
 
-    var vendasHoje = state.vendas.filter(function(v){ return v.data === hoje; });
+    var vendasHoje = vendasAtivas().filter(function(v){ return v.data === hoje; });
     document.getElementById("finVendasHojeTotal").textContent = brl(vendasHoje.reduce(function(s,v){ return s + v.total; }, 0));
     document.getElementById("finVendasHojePagamentos").innerHTML = pagamentosChipsHtml(vendasHoje);
 
@@ -1770,7 +1992,7 @@
     var hoje = todayISO();
     var ym = hoje.slice(0,7);
 
-    var vendasHoje = state.vendas.filter(function(v){ return v.data === hoje; });
+    var vendasHoje = vendasAtivas().filter(function(v){ return v.data === hoje; });
     var despesasHoje = state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento === hoje; });
 
     var pagamentosHoje = somarPorForma(vendasHoje);
@@ -1813,7 +2035,7 @@
       return;
     }
 
-    var vendasMes = state.vendas.filter(function(v){ return v.data.slice(0,7) === ym; });
+    var vendasMes = vendasAtivas().filter(function(v){ return v.data.slice(0,7) === ym; });
     var despesasMes = state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento.slice(0,7) === ym; });
 
     var pagamentosMes = somarPorForma(vendasMes);
@@ -1913,6 +2135,15 @@
 
   function sum(arr){ return arr.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0); }
 
+  function categoriaOptionsHtml(selecionada){
+    var lista = state.categorias.slice();
+    // categoria antiga digitada à mão continua aparecendo para não sumir do cadastro
+    if(selecionada && lista.indexOf(selecionada) === -1) lista.unshift(selecionada);
+    return lista.map(function(c){
+      return '<option value="' + esc(c) + '"' + (c === selecionada ? " selected" : "") + '>' + esc(c) + '</option>';
+    }).join("");
+  }
+
   function naturezaOptionsHtml(selecionada){
     return state.naturezas.map(function(n){
       return '<option value="' + esc(n) + '"' + (n === selecionada ? " selected" : "") + '>' + esc(n) + '</option>';
@@ -1996,8 +2227,8 @@
     openContaModal(null);
   });
 
-  function clienteOptionsHtml(selecionado){
-    return '<option value="">Selecione...</option>' + state.clientes.map(function(c){
+  function clienteOptionsHtml(selecionado, rotuloVazio){
+    return '<option value="">' + (rotuloVazio || "Selecione...") + '</option>' + state.clientes.map(function(c){
       return '<option value="' + c.id + '"' + (c.id === selecionado ? " selected" : "") + '>' + esc(c.nome) + '</option>';
     }).join("");
   }
@@ -2241,6 +2472,31 @@
   bindEyeToggle("eyeTotal");
   bindEyeToggle("eyeDespesasTotal");
 
+  // Custo da mercadoria é informação de administrador: só aparece com a senha.
+  var custoVisivel = false;
+  document.getElementById("eyeCusto").addEventListener("click", function(e){
+    e.stopPropagation();
+    if(custoVisivel){
+      custoVisivel = false;
+      renderProdutos(document.getElementById("buscaProdutos").value);
+      atualizarOlhoCusto();
+    } else {
+      pedirSenhaAdmin(function(){
+        custoVisivel = true;
+        renderProdutos(document.getElementById("buscaProdutos").value);
+        atualizarOlhoCusto();
+      });
+    }
+  });
+
+  function atualizarOlhoCusto(){
+    var btn = document.getElementById("eyeCusto");
+    btn.innerHTML = custoVisivel ? EYE_OPEN_SVG : EYE_OFF_SVG;
+    btn.setAttribute("aria-pressed", custoVisivel ? "true" : "false");
+    btn.setAttribute("aria-label", custoVisivel ? "Ocultar custo" : "Mostrar custo");
+    btn.title = custoVisivel ? "Ocultar custo" : "Mostrar custo (admin)";
+  }
+
   function toggleGraficosVisiveis(){
     if(graficosVisiveis){
       graficosVisiveis = false;
@@ -2273,7 +2529,7 @@
 
   function totaisMensais(){
     return ultimosMeses(6).map(function(m){
-      var vendasMes = sum(state.vendas.filter(function(v){ return v.data.slice(0,7) === m.ym; }).map(function(v){ return { valor: v.total }; }));
+      var vendasMes = sum(vendasAtivas().filter(function(v){ return v.data.slice(0,7) === m.ym; }).map(function(v){ return { valor: v.total }; }));
       var despesasMes = sum(state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento.slice(0,7) === m.ym; }));
       return { label: m.label, vendas: vendasMes, despesas: despesasMes, cresc: vendasMes - despesasMes };
     });
@@ -2423,14 +2679,14 @@
   function renderDashboard(){
     var now = new Date();
     var ym = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0");
-    var vendasMes = state.vendas.filter(function(v){ return v.data.slice(0,7) === ym; });
+    var vendasMes = vendasAtivas().filter(function(v){ return v.data.slice(0,7) === ym; });
     var totalVendas = sum(vendasMes.map(function(v){ return { valor: v.total }; }));
     document.getElementById("kpiVendasMes").textContent = kpiVisiveis ? brl(totalVendas) : "R$ ••••";
-    document.getElementById("kpiVendasQtd").textContent = vendasMes.length + " vendas";
+    document.getElementById("kpiVendasQtd").textContent = vendasMes.length + (vendasMes.length === 1 ? " venda" : " vendas");
 
     var pagarPendente = state.contas.filter(function(c){ return c.tipo === "pagar" && c.status === "pendente"; });
     document.getElementById("kpiPagar").textContent = kpiVisiveis ? brl(sum(pagarPendente)) : "R$ ••••";
-    document.getElementById("kpiPagarQtd").textContent = pagarPendente.length + " pendentes";
+    document.getElementById("kpiPagarQtd").textContent = pagarPendente.length + (pagarPendente.length === 1 ? " pendente" : " pendentes");
 
     [document.getElementById("eyeVendas"), document.getElementById("eyeDespesas")].forEach(function(btn){
       btn.innerHTML = kpiVisiveis ? EYE_OPEN_SVG : EYE_OFF_SVG;
@@ -2444,7 +2700,12 @@
     tblU.innerHTML = ultimasVendas.length === 0
       ? '<tr class="empty-row"><td colspan="4">Nenhuma venda registrada.</td></tr>'
       : ultimasVendas.map(function(v){
-          return '<tr><td>' + fmtDate(v.data) + '</td><td>' + esc(clienteNome(v.clienteId)) + '</td><td>' + v.itens.length + ' item(ns)</td><td class="cell-strong">' + brl(v.total) + '</td></tr>';
+          return '<tr class="vd-row" data-uv-venda="' + v.id + '" title="Ver detalhes desta venda">' +
+            '<td>' + fmtDate(v.data) + '</td>' +
+            '<td>' + esc(clienteNome(v.clienteId)) + selosVenda(v) + '</td>' +
+            '<td>' + v.itens.length + ' item(ns)</td>' +
+            '<td class="cell-strong">' + brl(v.total) + '</td>' +
+          '</tr>';
         }).join("");
 
     renderGraficos();
@@ -2642,6 +2903,7 @@
     renderAssistencias();
     renderFinanceiro();
     renderAdmin();
+    atualizarOlhoCusto();
   }
 
   // ================= EXPORTAR / IMPORTAR =================

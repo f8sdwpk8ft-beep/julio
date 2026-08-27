@@ -78,7 +78,7 @@
               <button class="kpi-eye" id="eyeVendas" type="button" aria-label="Mostrar valor" title="Mostrar valor" aria-pressed="false"></button>
             </div>
             <div class="kpi-sub" id="kpiVendasQtd">0 vendas</div>
-            <div class="kpi-footer">Ver detalhes das vendas <span aria-hidden="true">&rarr;</span></div>
+            <div class="kpi-footer">Ver detalhes<span class="kpi-footer-extra"> das vendas</span> <span aria-hidden="true">&rarr;</span></div>
           </div>
           <div class="kpi-card kpi-card-clickable kpi-card-solid kpi-solid-danger" id="kpiCardDespesas" title="Ver detalhes das despesas">
             <div class="kpi-label">Despesas</div>
@@ -87,12 +87,15 @@
               <button class="kpi-eye" id="eyeDespesas" type="button" aria-label="Mostrar valor" title="Mostrar valor" aria-pressed="false"></button>
             </div>
             <div class="kpi-sub danger" id="kpiPagarQtd">0 pendentes</div>
-            <div class="kpi-footer">Ver detalhes das despesas <span aria-hidden="true">&rarr;</span></div>
+            <div class="kpi-footer">Ver detalhes<span class="kpi-footer-extra"> das despesas</span> <span aria-hidden="true">&rarr;</span></div>
           </div>
         </div>
 
         <div class="panel">
-          <div class="panel-head"><h2>Últimas vendas</h2></div>
+          <div class="panel-head">
+            <h2>Últimas vendas</h2>
+            <button class="btn btn-ghost btn-sm" id="btnHistoricoVendas">Ver todo o histórico</button>
+          </div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Total</th></tr></thead>
@@ -143,6 +146,7 @@
                 <div class="date-range-popover hidden" id="periodoPopover"></div>
               </div>
               <button class="btn btn-primary" id="btnNovaVenda">+ Nova venda</button>
+              <button class="btn btn-danger" id="btnDevolucao">Devoluções</button>
             </div>
           </div>
           <div class="table-wrap">
@@ -163,7 +167,7 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Cliente</th><th>Vendedor</th><th>Aparelho/Serviço</th><th>Valor</th><th>Entrada</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th>Cliente</th><th>Vendedor</th><th>Aparelho / Serviço</th><th>Valor</th><th>Entrada</th><th>Status</th><th></th></tr></thead>
               <tbody id="tblAssistencias"></tbody>
             </table>
           </div>
@@ -180,7 +184,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
                 <input type="text" id="buscaProdutos" placeholder="Buscar produto...">
               </div>
-              <button class="btn btn-primary" id="btnNovoProduto">+ Novo produto</button>
+              <button class="kpi-eye" id="eyeCusto" type="button" aria-label="Mostrar custo" title="Mostrar custo (admin)" aria-pressed="false"></button><button class="btn btn-primary" id="btnNovoProduto">+ Novo produto</button>
             </div>
           </div>
           <div class="table-wrap">
@@ -207,7 +211,7 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Nome</th><th>CPF</th><th>Telefone</th><th>E-mail</th><th>Observações</th><th></th></tr></thead>
+              <thead><tr><th>Nome</th><th>CPF / CNPJ</th><th>Telefone</th><th>E-mail</th><th>Observações</th><th></th></tr></thead>
               <tbody id="tblClientes"></tbody>
             </table>
           </div>
@@ -224,7 +228,7 @@
               <button class="kpi-eye" id="eyeTotal" type="button" aria-label="Mostrar valor" title="Mostrar valor" aria-pressed="false"></button>
             </div>
             <div class="kpi-sub" id="kpiTotalSub">vendas do mês</div>
-            <div class="kpi-footer">Ver detalhes das vendas <span aria-hidden="true">&rarr;</span></div>
+            <div class="kpi-footer">Ver detalhes<span class="kpi-footer-extra"> das vendas</span> <span aria-hidden="true">&rarr;</span></div>
           </div>
           <div class="kpi-card kpi-card-clickable kpi-card-solid kpi-solid-danger" id="kpiCardDespesasTotal" title="Ver detalhes das despesas">
             <div class="kpi-label">Despesas</div>
@@ -233,7 +237,7 @@
               <button class="kpi-eye" id="eyeDespesasTotal" type="button" aria-label="Mostrar valor" title="Mostrar valor" aria-pressed="false"></button>
             </div>
             <div class="kpi-sub" id="kpiDespesasSub">despesas pendentes</div>
-            <div class="kpi-footer">Ver detalhes das despesas <span aria-hidden="true">&rarr;</span></div>
+            <div class="kpi-footer">Ver detalhes<span class="kpi-footer-extra"> das despesas</span> <span aria-hidden="true">&rarr;</span></div>
           </div>
         </div>
         <div class="panel">

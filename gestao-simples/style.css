@@ -98,8 +98,9 @@ button, input, select{font-family:inherit;}
 .hidden{display:none !important;}
 
 /* ---------- Cards / KPIs ---------- */
+/* Sempre dois cards por linha — inclusive no celular e no tablet */
 .kpi-grid{
-  display:grid;grid-template-columns:1fr;
+  display:grid;grid-template-columns:1fr 1fr;
   gap:1rem;margin-bottom:1.6rem;
 }
 @media (min-width:900px){.kpi-grid{grid-template-columns:repeat(auto-fit,minmax(260px,1fr));}
@@ -462,6 +463,28 @@ tbody tr:hover{background:var(--surface-2, rgba(0,0,0,0.02));}
   .menu-toggle{display:inline-flex;}
 }
 
+/* Celular: aperta o respiro geral e encolhe os cards para caberem dois por linha */
+@media (max-width:620px){
+  .content{padding:1rem 1rem 2.5rem;}
+  .panel{padding:1.25rem 1rem;}
+  .kpi-grid{gap:0.7rem;}
+  .kpi-card{padding:1rem 0.85rem;min-height:120px;}
+  .kpi-card-solid{min-height:165px;padding:1rem 0.85rem 0;}
+  .kpi-label{font-size:0.65rem;letter-spacing:0.03em;}
+  .kpi-sub{font-size:0.72rem;}
+  .kpi-card-solid .kpi-value-lg{font-size:clamp(1.15rem,5.4vw,1.7rem);}
+  /* o olho sai da linha do número, liberando a largura toda para o valor.
+     .kpi-value-row precisa deixar de ser o ancestral posicionado para o olho
+     se ancorar no card, e o valor recebe z-index para não ficar sob a seta. */
+  .kpi-card-solid .kpi-value-row{gap:0;position:static;}
+  .kpi-card-solid .kpi-value{position:relative;z-index:1;}
+  .kpi-card-solid .kpi-eye{position:absolute;top:0.55rem;right:0.55rem;padding:0.2rem;z-index:2;}
+  .kpi-footer-extra{display:none;}
+  .kpi-card-solid .kpi-eye svg{width:15px;height:15px;}
+  .kpi-card-solid::before{width:88px;height:88px;right:2px;bottom:40px;}
+  .kpi-footer{margin:0.7rem -0.85rem 0;padding:0.55rem 0.4rem;font-size:0.66rem;}
+}
+
 /* ---------- Recibo de venda (impressão) ---------- */
 .recibo-print{display:none;}
 .recibo-loja{font-size:1.1rem;font-weight:800;text-align:center;}
@@ -481,3 +504,8 @@ tbody tr:hover{background:var(--surface-2, rgba(0,0,0,0.02));}
     width:80mm;padding:2mm;font-family:'Courier New',monospace;color:#000;
   }
 }
+
+/* Custo protegido e vendas devolvidas */
+.valor-oculto{color:var(--ink-faint);letter-spacing:0.08em;}
+.linha-devolvida td{opacity:0.55;text-decoration:line-through;}
+.linha-devolvida td.cell-actions{opacity:1;text-decoration:none;}
