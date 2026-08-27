@@ -939,7 +939,7 @@
   }
 
   function openVendaModal(venda){
-    if(state.produtos.length === 0){
+    if(!venda && state.produtos.length === 0){
       toast("Cadastre um produto antes de registrar uma venda");
       return;
     }
