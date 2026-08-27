@@ -186,13 +186,20 @@ button, input, select{font-family:inherit;}
 .chart-panel{margin-bottom:0;}
 .chart-holder{width:100%;}
 .chart-holder svg{width:100%;height:auto;display:block;overflow:visible;}
-.chart-bar{transition:opacity .15s ease;}
+.chart-bar{transition:opacity .15s ease;cursor:pointer;}
 .chart-bar:hover{opacity:0.8;}
-.chart-value-label{font-size:7px;font-weight:700;font-family:'Inter',system-ui,sans-serif;}
-.chart-axis-label{font-size:7px;fill:var(--ink-faint);font-family:'Inter',system-ui,sans-serif;}
-.chart-trend-line{fill:none;stroke:var(--ink-dim);stroke-width:1;stroke-dasharray:2.5,2.5;opacity:0.55;}
-.chart-trend-dot{fill:var(--ink);}
-.chart-baseline{stroke:var(--line);stroke-width:1;}
+
+.chart-tooltip{
+  position:fixed;z-index:200;pointer-events:none;
+  background:#1c2430;color:#fff;font-size:0.78rem;font-weight:600;
+  padding:0.45rem 0.7rem;border-radius:8px;box-shadow:0 8px 24px -6px rgba(0,0,0,0.4);
+  white-space:nowrap;
+}
+.chart-value-label{font-size:7px;font-weight:700;font-family:'Inter',system-ui,sans-serif;pointer-events:none;}
+.chart-axis-label{font-size:7px;fill:var(--ink-faint);font-family:'Inter',system-ui,sans-serif;pointer-events:none;}
+.chart-trend-line{fill:none;stroke:var(--ink-dim);stroke-width:1;stroke-dasharray:2.5,2.5;opacity:0.55;pointer-events:none;}
+.chart-trend-dot{fill:var(--ink);pointer-events:none;}
+.chart-baseline{stroke:var(--line);stroke-width:1;pointer-events:none;}
 .chart-legend{display:flex;gap:1rem;font-size:0.76rem;color:var(--ink-dim);font-weight:600;}
 .chart-legend span{display:inline-flex;align-items:center;gap:0.35rem;}
 .chart-legend i{width:9px;height:9px;border-radius:2px;display:inline-block;}

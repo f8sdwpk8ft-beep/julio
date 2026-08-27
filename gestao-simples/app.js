@@ -3,7 +3,7 @@
 
   var STORAGE_KEY = "gestao-simples-data-v1";
 
-  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], vendedores: [], comissaoPercentual: 5, nomeLoja: "" };
+  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], vendedores: [], comissaoPercentual: 2, nomeLoja: "" };
 
   function loadData(){
     try{
@@ -79,6 +79,13 @@
     if(onMount) onMount(document.getElementById("modalBody"));
   }
   function closeModal(){ modalRoot.innerHTML = ""; }
+
+  // ---------- Campos numéricos: some o "0" ao focar, pra digitar direto ----------
+  document.addEventListener("focusin", function(e){
+    if(e.target.tagName === "INPUT" && e.target.type === "number" && e.target.value === "0"){
+      e.target.value = "";
+    }
+  });
 
   // ---------- Navigation ----------
   var views = ["dashboard","vendas","produtos","clientes","financeiro","admin"];
@@ -781,11 +788,7 @@
     var produtoAtual = item ? state.produtos.find(function(p){ return p.id === item.produtoId; }) : null;
     return (
       '<div class="venda-item-row" data-row="' + idx + '">' +
-        '<div class="combo-wrap">' +
-          '<input type="hidden" class="v-produto-id" value="' + (item ? item.produtoId : "") + '">' +
-          '<input type="text" class="v-produto-busca" placeholder="Digite para buscar produto..." autocomplete="off" value="' + (produtoAtual ? esc(produtoAtual.nome) : "") + '">' +
-          '<div class="combo-dropdown hidden"></div>' +
-        '</div>' +
+        comboProdutoHtml(item ? item.produtoId : "", produtoAtual ? produtoAtual.nome : "") +
         '<input class="v-qtd" type="number" min="1" value="' + (item ? item.qtd : 1) + '">' +
         '<input class="v-preco" type="number" min="0" step="0.01" value="' + (item ? item.precoUnit : 0) + '">' +
         '<button type="button" class="btn btn-icon btn-danger v-remove" title="Remover">&times;</button>' +
@@ -819,6 +822,57 @@
         '<button type="button" class="btn btn-icon btn-danger ps-remove" title="Remover">&times;</button>' +
       '</div>'
     );
+  }
+
+  // ---------- Combobox de produto (busca ao digitar), reutilizável em qualquer formulário ----------
+  function comboProdutoHtml(produtoIdAtual, produtoNomeAtual){
+    return (
+      '<div class="combo-wrap">' +
+        '<input type="hidden" class="v-produto-id" value="' + (produtoIdAtual || "") + '">' +
+        '<input type="text" class="v-produto-busca" placeholder="Digite para buscar produto..." autocomplete="off" value="' + esc(produtoNomeAtual || "") + '">' +
+        '<div class="combo-dropdown hidden"></div>' +
+      '</div>'
+    );
+  }
+
+  function bindComboProduto(container, onSelect){
+    var buscaInput = container.querySelector(".v-produto-busca");
+    var idInput = container.querySelector(".v-produto-id");
+    var dd = container.querySelector(".combo-dropdown");
+
+    function abrirDropdown(termo){
+      var termoLower = (termo || "").toLowerCase();
+      var matches = state.produtos.filter(function(p){
+        return !termoLower || p.nome.toLowerCase().indexOf(termoLower) !== -1;
+      }).slice(0, 30);
+      dd.innerHTML = matches.length === 0
+        ? '<div class="combo-empty">Nenhum produto encontrado</div>'
+        : matches.map(function(p){
+            return '<div class="combo-item" data-produto-id="' + p.id + '">' + esc(p.nome) +
+              ' <span class="combo-item-sub">(' + p.estoque + ' em estoque · ' + brl(p.preco) + ')</span></div>';
+          }).join("");
+      dd.classList.remove("hidden");
+    }
+    function fecharDropdown(){ dd.classList.add("hidden"); dd.innerHTML = ""; }
+
+    buscaInput.addEventListener("focus", function(){ abrirDropdown(buscaInput.value); });
+    buscaInput.addEventListener("input", function(){
+      idInput.value = "";
+      abrirDropdown(buscaInput.value);
+    });
+    buscaInput.addEventListener("blur", function(){
+      setTimeout(fecharDropdown, 150);
+    });
+    dd.addEventListener("mousedown", function(e){
+      var item = e.target.closest(".combo-item[data-produto-id]");
+      if(!item) return;
+      var prod = state.produtos.find(function(p){ return p.id === item.dataset.produtoId; });
+      if(!prod) return;
+      idInput.value = prod.id;
+      buscaInput.value = prod.nome;
+      fecharDropdown();
+      if(onSelect) onSelect(prod);
+    });
   }
 
   function vendaForm(venda){
@@ -940,48 +994,11 @@
         recalcSplitStatus();
       }
 
-      function fecharDropdown(dd){ dd.classList.add("hidden"); dd.innerHTML = ""; }
-
-      function abrirDropdown(row, termo){
-        var dd = row.querySelector(".combo-dropdown");
-        var termoLower = (termo || "").toLowerCase();
-        var matches = state.produtos.filter(function(p){
-          return !termoLower || p.nome.toLowerCase().indexOf(termoLower) !== -1;
-        }).slice(0, 30);
-        dd.innerHTML = matches.length === 0
-          ? '<div class="combo-empty">Nenhum produto encontrado</div>'
-          : matches.map(function(p){
-              return '<div class="combo-item" data-produto-id="' + p.id + '">' + esc(p.nome) +
-                ' <span class="combo-item-sub">(' + p.estoque + ' em estoque · ' + brl(p.preco) + ')</span></div>';
-            }).join("");
-        dd.classList.remove("hidden");
-      }
-
       function bindRow(row){
-        var buscaInput = row.querySelector(".v-produto-busca");
-        var idInput = row.querySelector(".v-produto-id");
-        var dd = row.querySelector(".combo-dropdown");
-
-        buscaInput.addEventListener("focus", function(){ abrirDropdown(row, buscaInput.value); });
-        buscaInput.addEventListener("input", function(){
-          idInput.value = "";
-          abrirDropdown(row, buscaInput.value);
-        });
-        buscaInput.addEventListener("blur", function(){
-          setTimeout(function(){ fecharDropdown(dd); }, 150);
-        });
-        dd.addEventListener("mousedown", function(e){
-          var item = e.target.closest(".combo-item[data-produto-id]");
-          if(!item) return;
-          var prod = state.produtos.find(function(p){ return p.id === item.dataset.produtoId; });
-          if(!prod) return;
-          idInput.value = prod.id;
-          buscaInput.value = prod.nome;
+        bindComboProduto(row, function(prod){
           row.querySelector(".v-preco").value = prod.preco;
-          fecharDropdown(dd);
           recalcTotal();
         });
-
         row.querySelector(".v-qtd").addEventListener("input", recalcTotal);
         row.querySelector(".v-preco").addEventListener("input", recalcTotal);
         row.querySelector(".v-remove").addEventListener("click", function(){
@@ -1375,13 +1392,13 @@
       tbodyDev.innerHTML = devedores.map(function(c){
         return '<tr>' +
           '<td class="cell-strong">' + esc(c.descricao) + '</td>' +
-          '<td>' + esc(c.natureza || "-") + '</td>' +
+          '<td>' + esc(c.produtoNome || c.natureza || "-") + '</td>' +
           '<td>' + fmtDate(c.vencimento) + '</td>' +
           '<td>' + brl(c.valor) + '</td>' +
           '<td><span class="badge badge-warn">pendente</span></td>' +
           '<td class="cell-actions">' +
             '<button class="btn btn-ghost btn-sm" data-edit-devedor="' + c.id + '">Editar</button>' +
-            '<button class="btn btn-ghost btn-sm" data-recebido-conta="' + c.id + '">Recebido</button>' +
+            '<button class="btn btn-secondary btn-sm" data-recebido-conta="' + c.id + '">Marcar como pago</button>' +
             '<button class="btn btn-danger btn-sm" data-del-devedor="' + c.id + '">Remover</button>' +
           '</td>' +
         '</tr>';
@@ -1447,7 +1464,8 @@
     var pagamentosHoje = somarPorForma(vendasHoje);
     var totalVendasHoje = vendasHoje.reduce(function(s,v){ return s + v.total; }, 0);
     var totalDespesasHoje = despesasHoje.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0);
-    var caixaEsperado = (pagamentosHoje["Dinheiro"] || 0) + (pagamentosHoje["Pix"] || 0) - totalDespesasHoje;
+    var despesasHojeDinheiro = despesasHoje.filter(function(c){ return c.formaPagamento === "Dinheiro"; }).reduce(function(s,c){ return s + Number(c.valor || 0); }, 0);
+    var caixaEsperadoDinheiro = (pagamentosHoje["Dinheiro"] || 0) - despesasHojeDinheiro;
 
     var fechamentoDiaHtml =
       '<div class="fechamento-grid">' +
@@ -1464,7 +1482,7 @@
         fechamentoDetalhesHtml(pagamentosHoje,
           '<div style="margin-top:0.8rem;padding-top:0.8rem;border-top:2px solid var(--line);">' +
             '<div class="fechamento-detalhes-row" style="font-weight:700;color:var(--ok);">' +
-              '<span>Caixa Esperado</span><span>' + brl(caixaEsperado) + '</span>' +
+              '<span>Caixa Esperado em Dinheiro</span><span>' + brl(caixaEsperadoDinheiro) + '</span>' +
             '</div>' +
           '</div>'
         ) +
@@ -1666,38 +1684,162 @@
     openContaModal(null);
   });
 
-  document.getElementById("btnNovoDevedor").addEventListener("click", function(){
-    openModal("Novo devedor", (
-      '<div class="field"><label>Pessoa/Cliente</label><input id="fDevedorNome" placeholder="Nome de quem deve"></div>' +
+  function clienteOptionsHtml(selecionado){
+    return '<option value="">Selecione...</option>' + state.clientes.map(function(c){
+      return '<option value="' + c.id + '"' + (c.id === selecionado ? " selected" : "") + '>' + esc(c.nome) + '</option>';
+    }).join("");
+  }
+
+  function devedorForm(conta){
+    conta = conta || {};
+    var produtoAtual = conta.produtoId ? state.produtos.find(function(p){ return p.id === conta.produtoId; }) : null;
+    var btnSaveText = conta.id ? "Atualizar" : "Salvar";
+    return (
       '<div class="field-row">' +
-        '<div class="field"><label>Motivo da dívida</label><input id="fDevedorMotivo" placeholder="Ex: Venda a prazo, empréstimo..."></div>' +
-        '<div class="field"><label>Valor</label><input id="fDevedorValor" type="number" min="0" step="0.01"></div>' +
+        '<div class="field"><label>Cliente</label><div style="display:flex;gap:0.4rem;">' +
+          '<select id="fDevedorCliente" style="flex:1;">' + clienteOptionsHtml(conta.clienteId) + '</select>' +
+          '<button type="button" class="btn btn-ghost btn-sm" id="btnNovoClienteDevedorInline" title="Cadastrar cliente">+</button>' +
+        '</div></div>' +
+        '<div class="field"><label>Vendedor</label><div style="display:flex;gap:0.4rem;">' +
+          '<select id="fDevedorVendedor" style="flex:1;">' + vendedorOptionsHtml(conta.vendedor) + '</select>' +
+          '<button type="button" class="btn btn-ghost btn-sm" id="btnNovoVendedorDevedorInline" title="Adicionar vendedor">+</button>' +
+        '</div></div>' +
       '</div>' +
-      '<div class="field"><label>Vencimento</label><input id="fDevedorVencimento" type="date" value="' + todayISO() + '"></div>' +
-      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">Salvar</button></div>'
-    ), function(body){
+      '<div class="field"><label>Mercadoria</label>' + comboProdutoHtml(conta.produtoId, produtoAtual ? produtoAtual.nome : (conta.produtoNome || "")) + '</div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>Valor</label><input id="fDevedorValor" type="number" min="0" step="0.01" value="' + (conta.valor || "") + '"></div>' +
+        '<div class="field"><label>Data prevista para pagamento</label><input id="fDevedorVencimento" type="date" value="' + (conta.vencimento || todayISO()) + '"></div>' +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">' + btnSaveText + '</button></div>'
+    );
+  }
+
+  function openDevedorModal(conta){
+    var isEdit = !!conta;
+    openModal(isEdit ? "Editar devedor" : "Novo devedor", devedorForm(conta), function(body){
+      bindComboProduto(body.querySelector(".combo-wrap"), function(prod){
+        body.querySelector("#fDevedorValor").value = prod.preco;
+      });
+
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
+
+      body.querySelector("#btnNovoClienteDevedorInline").addEventListener("click", function(){
+        var nome = prompt("Nome do novo cliente:");
+        if(!nome) return;
+        nome = nome.trim();
+        if(!nome) return;
+        var novoCliente = { id: uid(), nome: nome, cpf: "", telefone: "", email: "", obs: "" };
+        state.clientes.push(novoCliente);
+        saveData();
+        body.querySelector("#fDevedorCliente").innerHTML = clienteOptionsHtml(novoCliente.id);
+        toast("Cliente cadastrado");
+      });
+
+      body.querySelector("#btnNovoVendedorDevedorInline").addEventListener("click", function(){
+        var nome = prompt("Nome do novo vendedor:");
+        if(!nome) return;
+        nome = nome.trim();
+        if(!nome) return;
+        if(state.vendedores.indexOf(nome) === -1){
+          state.vendedores.push(nome);
+          saveData();
+        }
+        body.querySelector("#fDevedorVendedor").innerHTML = vendedorOptionsHtml(nome);
+      });
+
       body.querySelector("#btnSave").addEventListener("click", function(){
-        var nome = body.querySelector("#fDevedorNome").value.trim();
-        var motivo = body.querySelector("#fDevedorMotivo").value.trim();
+        var clienteId = body.querySelector("#fDevedorCliente").value;
+        var vendedor = body.querySelector("#fDevedorVendedor").value || null;
+        var produtoId = body.querySelector(".v-produto-id").value;
         var valor = parseFloat(body.querySelector("#fDevedorValor").value) || 0;
-        if(!nome || !motivo || valor <= 0){ toast("Preencha todos os campos corretamente"); return; }
-        state.contas.push({
-          id: uid(),
-          descricao: nome,
-          tipo: "receber",
-          natureza: motivo,
-          valor: valor,
-          vencimento: body.querySelector("#fDevedorVencimento").value || todayISO(),
-          status: "pendente"
-        });
+        var vencimento = body.querySelector("#fDevedorVencimento").value || todayISO();
+
+        if(!clienteId){ toast("Selecione o cliente"); return; }
+        if(!produtoId){ toast("Selecione a mercadoria (use a busca)"); return; }
+        if(valor <= 0){ toast("Informe um valor válido"); return; }
+
+        var prod = state.produtos.find(function(p){ return p.id === produtoId; });
+        if(!prod){ toast("Mercadoria inválida"); return; }
+
+        if(isEdit){
+          if(conta.produtoId !== produtoId){
+            if(prod.estoque <= 0){ toast("Estoque insuficiente para " + prod.nome); return; }
+            var prodAntigo = state.produtos.find(function(p){ return p.id === conta.produtoId; });
+            if(prodAntigo) prodAntigo.estoque = Math.max(0, prodAntigo.estoque + 1);
+            prod.estoque = Math.max(0, prod.estoque - 1);
+          }
+          conta.clienteId = clienteId;
+          conta.descricao = clienteNome(clienteId);
+          conta.vendedor = vendedor;
+          conta.produtoId = produtoId;
+          conta.produtoNome = prod.nome;
+          conta.valor = valor;
+          conta.vencimento = vencimento;
+          toast("Devedor atualizado");
+        } else {
+          if(prod.estoque <= 0){ toast("Estoque insuficiente para " + prod.nome); return; }
+          prod.estoque = Math.max(0, prod.estoque - 1);
+          state.contas.push({
+            id: uid(),
+            clienteId: clienteId,
+            descricao: clienteNome(clienteId),
+            tipo: "receber",
+            vendedor: vendedor,
+            produtoId: produtoId,
+            produtoNome: prod.nome,
+            valor: valor,
+            vencimento: vencimento,
+            status: "pendente"
+          });
+          toast("Devedor adicionado");
+        }
         saveData();
         closeModal();
         renderAll();
-        toast("Devedor adicionado");
       });
     });
-  });
+  }
+
+  document.getElementById("btnNovoDevedor").addEventListener("click", function(){ openDevedorModal(null); });
+
+  // Marcar devedor como pago: pede a forma de pagamento e lança a venda direto no caixa.
+  function abrirMarcarDevedorPago(contaId){
+    var c = state.contas.find(function(x){ return x.id === contaId; });
+    if(!c) return;
+    var formas = ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix"];
+    openModal("Marcar como pago", (
+      '<p style="margin:0 0 1rem;color:var(--ink-dim);">' + esc(clienteNome(c.clienteId)) + ' pagou ' + brl(c.valor) + '. Qual foi a forma de pagamento?</p>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem;">' +
+        formas.map(function(f){ return '<button type="button" class="btn btn-ghost" data-forma-pagto="' + esc(f) + '">' + esc(f) + '</button>'; }).join("") +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button></div>'
+    ), function(body){
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelectorAll("[data-forma-pagto]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var forma = btn.dataset.formaPagto;
+          state.vendas.push({
+            id: uid(),
+            data: todayISO(),
+            criadoEm: new Date().toISOString(),
+            clienteId: c.clienteId || null,
+            vendedor: c.vendedor || null,
+            itens: [{ produtoId: c.produtoId, nome: c.produtoNome || c.descricao, qtd: 1, precoUnit: c.valor }],
+            total: c.valor,
+            desconto: 0,
+            pagamento: forma,
+            pagamentos: [{ forma: forma, valor: c.valor }],
+            origemDevedorId: c.id
+          });
+          c.status = "pago";
+          saveData();
+          closeModal();
+          renderAll();
+          toast("Pagamento lançado no caixa");
+        });
+      });
+    });
+  }
 
   document.getElementById("tblContas").addEventListener("click", function(e){
     var editId = e.target.dataset.editConta;
@@ -1712,12 +1854,9 @@
       if(c){ c.status = "pago"; saveData(); renderAll(); toast("Conta marcada como paga"); }
     }
     if(delId){
-      var c = state.contas.find(function(c){ return c.id === delId; });
-      if(!c) return;
-      if(confirm("Converter esta despesa para dívida de cliente?")){
-        c.tipo = "receber";
-        c.status = "pendente";
-        saveData(); renderAll(); toast("Convertida para dívida de cliente");
+      if(confirm("Excluir esta despesa?")){
+        state.contas = state.contas.filter(function(c){ return c.id !== delId; });
+        saveData(); renderAll(); toast("Despesa excluída");
       }
     }
   });
@@ -1728,14 +1867,11 @@
     var delId = e.target.dataset.delDevedor;
     if(editId){
       var c = state.contas.find(function(c){ return c.id === editId; });
-      if(c) openContaModal(c);
+      if(c) openDevedorModal(c);
     }
-    if(recebidoId){
-      var c = state.contas.find(function(c){ return c.id === recebidoId; });
-      if(c){ c.status = "pago"; saveData(); renderAll(); toast("Dívida marcada como recebida"); }
-    }
+    if(recebidoId) abrirMarcarDevedorPago(recebidoId);
     if(delId){
-      if(confirm("Remover este devedor?")){
+      if(confirm("Remover este devedor? O estoque da mercadoria não será restaurado automaticamente.")){
         state.contas = state.contas.filter(function(c){ return c.id !== delId; });
         saveData(); renderAll(); toast("Devedor removido");
       }
@@ -1853,7 +1989,11 @@
       var barTop = Math.min(y, baselineY);
       var barH = Math.max(1, Math.abs(y - baselineY));
       var color = opts.colorFn ? opts.colorFn(v) : opts.color;
-      bars += '<rect class="chart-bar" x="' + (cx - barW/2).toFixed(1) + '" y="' + barTop.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + barH.toFixed(1) + '" rx="2" fill="' + color + '"><title>' + esc(labels[i]) + ": " + brl(v) + '</title></rect>';
+      var tip = opts.tipFn ? opts.tipFn(i) : (labels[i] + ": " + brl(v));
+      // Faixa invisível de altura total: garante que passar o mouse/dedo em qualquer
+      // ponto da coluna do mês mostre o valor, mesmo quando a barra visível é bem fina.
+      bars += '<rect class="chart-hit" data-tip="' + esc(tip) + '" x="' + (padL + slot*i).toFixed(1) + '" y="' + padTop + '" width="' + slot.toFixed(1) + '" height="' + chartH + '" fill="transparent"></rect>';
+      bars += '<rect class="chart-bar" data-tip="' + esc(tip) + '" x="' + (cx - barW/2).toFixed(1) + '" y="' + barTop.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + barH.toFixed(1) + '" rx="2" fill="' + color + '"></rect>';
       points.push([cx, y]);
       labelsSvg += '<text class="chart-axis-label" x="' + cx.toFixed(1) + '" y="' + (h - 5) + '" text-anchor="middle">' + esc(labels[i]) + '</text>';
     }
@@ -1888,8 +2028,10 @@
       var hB = Math.max(1, (seriesB[i] / maxVal) * chartH);
       var xA = cx - gap/2 - barW;
       var xB = cx + gap/2;
-      bars += '<rect class="chart-bar" x="' + xA.toFixed(1) + '" y="' + (baselineY - hA).toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + hA.toFixed(1) + '" rx="2" fill="' + colorA + '"><title>' + esc(labels[i]) + " — Vendas: " + brl(seriesA[i]) + '</title></rect>';
-      bars += '<rect class="chart-bar" x="' + xB.toFixed(1) + '" y="' + (baselineY - hB).toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + hB.toFixed(1) + '" rx="2" fill="' + colorB + '"><title>' + esc(labels[i]) + " — Despesas: " + brl(seriesB[i]) + '</title></rect>';
+      var tip = labels[i] + " — Vendas: " + brl(seriesA[i]) + " · Despesas: " + brl(seriesB[i]);
+      bars += '<rect class="chart-hit" data-tip="' + esc(tip) + '" x="' + (padL + slot*i).toFixed(1) + '" y="' + padTop + '" width="' + slot.toFixed(1) + '" height="' + chartH + '" fill="transparent"></rect>';
+      bars += '<rect class="chart-bar" data-tip="' + esc(tip) + '" x="' + xA.toFixed(1) + '" y="' + (baselineY - hA).toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + hA.toFixed(1) + '" rx="2" fill="' + colorA + '"></rect>';
+      bars += '<rect class="chart-bar" data-tip="' + esc(tip) + '" x="' + xB.toFixed(1) + '" y="' + (baselineY - hB).toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + hB.toFixed(1) + '" rx="2" fill="' + colorB + '"></rect>';
       labelsSvg += '<text class="chart-axis-label" x="' + cx.toFixed(1) + '" y="' + (h - 5) + '" text-anchor="middle">' + esc(labels[i]) + '</text>';
     }
 
@@ -1922,9 +2064,49 @@
     );
     document.getElementById("chartCrescimento").innerHTML = buildTrendChartSVG(
       labels, dados.map(function(d){ return d.cresc; }),
-      { bipolar: true, colorFn: function(v){ return v >= 0 ? "var(--ok)" : "var(--danger)"; } }
+      {
+        bipolar: true,
+        colorFn: function(v){ return v >= 0 ? "var(--ok)" : "var(--danger)"; },
+        tipFn: function(i){
+          return dados[i].label + " — Vendas: " + brl(dados[i].vendas) + " · Despesas: " + brl(dados[i].despesas) + " · Crescimento: " + brl(dados[i].cresc);
+        }
+      }
     );
   }
+
+  // ---------- Tooltip interativo dos gráficos (mouse e toque) ----------
+  function bindChartTooltip(containerId){
+    var container = document.getElementById(containerId);
+    var tooltip = document.getElementById("chartTooltip");
+    function mostrar(e, barEl){
+      var texto = barEl.getAttribute("data-tip");
+      if(!texto) return;
+      tooltip.textContent = texto;
+      tooltip.classList.remove("hidden");
+      var x = e.clientX, y = e.clientY;
+      tooltip.style.left = Math.min(x + 12, window.innerWidth - tooltip.offsetWidth - 8) + "px";
+      tooltip.style.top = Math.max(y - 36, 8) + "px";
+    }
+    container.addEventListener("pointermove", function(e){
+      var alvo = e.target.closest("[data-tip]");
+      if(alvo){ mostrar(e, alvo); } else { tooltip.classList.add("hidden"); }
+    });
+    container.addEventListener("pointerdown", function(e){
+      var alvo = e.target.closest("[data-tip]");
+      if(alvo) mostrar(e, alvo);
+    });
+    // No toque, o dedo "levanta" e o pointerleave dispara na hora (o toque não
+    // tem estado de hover); só escondemos aqui para mouse — no toque, o tooltip
+    // fica visível até o usuário tocar em outro lugar (ver listener abaixo).
+    container.addEventListener("pointerleave", function(e){
+      if(e.pointerType !== "touch") tooltip.classList.add("hidden");
+    });
+  }
+  bindChartTooltip("chartVendasDespesas");
+  bindChartTooltip("chartCrescimento");
+  document.addEventListener("touchstart", function(e){
+    if(!e.target.closest("[data-tip]")) document.getElementById("chartTooltip").classList.add("hidden");
+  }, { passive: true });
 
   function renderDashboard(){
     var now = new Date();
