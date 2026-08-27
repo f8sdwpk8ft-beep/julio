@@ -165,6 +165,38 @@ button, input, select{font-family:inherit;}
 .kpi-solid-danger.kpi-card-clickable:hover{box-shadow:0 18px 38px -14px rgba(224,69,60,0.75);}
 .kpi-card-solid.kpi-card-clickable:active{transform:translateY(0);}
 
+/* Cards de destaque: mais altos, com seta decorativa e faixa de ação no rodapé */
+.kpi-card-solid{min-height:210px;padding-bottom:0;}
+.kpi-card-solid .kpi-value-lg{font-size:3rem;}
+.kpi-card-solid .kpi-value-row{align-items:center;}
+.kpi-card-solid::before{
+  content:"";position:absolute;right:6px;bottom:52px;
+  width:150px;height:150px;opacity:0.17;pointer-events:none;
+  background-repeat:no-repeat;background-position:center;background-size:contain;
+}
+.kpi-solid-ok::before{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M6 88H28V66H50V44H72V26' fill='none' stroke='%23fff' stroke-width='11'/%3E%3Cpath d='M60 10H92V42Z' fill='%23fff'/%3E%3C/svg%3E");
+}
+.kpi-solid-danger::before{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M6 12H28V34H50V56H72V74' fill='none' stroke='%23fff' stroke-width='11'/%3E%3Cpath d='M60 90H92V58Z' fill='%23fff'/%3E%3C/svg%3E");
+}
+.kpi-footer{
+  margin:1.1rem -1.3rem 0;padding:0.75rem 1.3rem;
+  background:rgba(0,0,0,0.13);
+  font-size:0.82rem;font-weight:600;color:rgba(255,255,255,0.94);
+  text-align:center;transition:background .15s ease;
+}
+.kpi-card-clickable:hover .kpi-footer{background:rgba(0,0,0,0.2);}
+
+/* Pares de painéis lado a lado (uma coluna no celular) */
+.panel-duo{display:grid;grid-template-columns:1fr;gap:1.25rem;margin-bottom:1.8rem;}
+@media (min-width:900px){.panel-duo{grid-template-columns:1fr 1fr;}}
+.panel-duo > .panel{margin-bottom:0;}
+/* Em meia largura, o resumo interno dos fechamentos empilha para não espremer */
+.panel-duo .fechamento-grid{grid-template-columns:1fr;}
+/* e os chips de pagamento viram grade de 2, em vez de esticar em linha */
+.panel-duo .vd-pagamentos{display:grid;grid-template-columns:1fr 1fr;}
+
 .panel{
   background:var(--surface);border-radius:12px;box-shadow:var(--shadow);
   padding:1.8rem 1.5rem;margin-bottom:1.8rem;
