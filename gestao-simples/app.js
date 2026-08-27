@@ -89,7 +89,7 @@
 
   // ---------- Navigation ----------
   var views = ["dashboard","vendas","assistencia","produtos","clientes","financeiro","admin"];
-  var titles = { dashboard:"Dashboard", vendas:"Vendas", assistencia:"Assistência Técnica", produtos:"Produtos", clientes:"Clientes", financeiro:"Financeiro", admin:"Admin" };
+  var titles = { dashboard:"Início", vendas:"Vendas", assistencia:"Assistência Técnica", produtos:"Produtos", clientes:"Clientes", financeiro:"Financeiro", admin:"Admin" };
   var adminDesbloqueado = false;
 
   function mostrarView(name){
@@ -100,7 +100,7 @@
       a.classList.toggle("active", a.dataset.view === name);
     });
     document.getElementById("pageTitle").textContent = titles[name];
-    document.getElementById("sidebar").classList.remove("open");
+    fecharSidebar();
     renderAll();
   }
 
@@ -122,8 +122,31 @@
     showView(a.dataset.view);
   });
 
-  document.getElementById("menuToggle").addEventListener("click", function(){
-    document.getElementById("sidebar").classList.toggle("open");
+  // ---------- Barra lateral (celular/tablet) ----------
+  function fecharSidebar(){
+    document.getElementById("sidebar").classList.remove("open");
+    document.getElementById("sidebarOverlay").classList.remove("show");
+  }
+  function abrirSidebar(){
+    document.getElementById("sidebar").classList.add("open");
+    document.getElementById("sidebarOverlay").classList.add("show");
+  }
+  document.getElementById("menuToggle").addEventListener("click", function(e){
+    e.stopPropagation();
+    if(document.getElementById("sidebar").classList.contains("open")) fecharSidebar();
+    else abrirSidebar();
+  });
+  // clicar em qualquer lugar fora da barra fecha (não só ao escolher uma seção)
+  document.getElementById("sidebarOverlay").addEventListener("click", fecharSidebar);
+  document.addEventListener("click", function(e){
+    var sidebar = document.getElementById("sidebar");
+    if(!sidebar.classList.contains("open")) return;
+    if(sidebar.contains(e.target)) return;
+    if(e.target.closest("#menuToggle")) return;
+    fecharSidebar();
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape") fecharSidebar();
   });
 
   // ================= CLIENTES =================
