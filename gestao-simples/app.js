@@ -3,7 +3,7 @@
 
   var STORAGE_KEY = "gestao-simples-data-v1";
 
-  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], vendedores: [], comissaoPercentual: 2, nomeLoja: "" };
+  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], assistencias: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], vendedores: [], comissaoPercentual: 2, nomeLoja: "" };
 
   function loadData(){
     try{
@@ -88,8 +88,8 @@
   });
 
   // ---------- Navigation ----------
-  var views = ["dashboard","vendas","produtos","clientes","financeiro","admin"];
-  var titles = { dashboard:"Dashboard", vendas:"Vendas", produtos:"Produtos", clientes:"Clientes", financeiro:"Financeiro", admin:"Admin" };
+  var views = ["dashboard","vendas","assistencia","produtos","clientes","financeiro","admin"];
+  var titles = { dashboard:"Dashboard", vendas:"Vendas", assistencia:"Assistência Técnica", produtos:"Produtos", clientes:"Clientes", financeiro:"Financeiro", admin:"Admin" };
   var adminDesbloqueado = false;
 
   function mostrarView(name){
@@ -313,9 +313,10 @@
     }
     tbody.innerHTML = list.map(function(v){
       var itensResumo = v.itens.map(function(i){ return i.qtd + "x " + i.nome; }).join(", ");
+      var badgeAssist = v.assistencia ? ' <span class="badge badge-muted">Assistência</span>' : "";
       return '<tr>' +
         '<td>' + fmtDate(v.data) + '</td>' +
-        '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + '</td>' +
+        '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + badgeAssist + '</td>' +
         '<td>' + esc(itensResumo) + '</td>' +
         '<td>' + esc(pagamentoResumoLabel(v)) + '</td>' +
         '<td class="cell-strong">' + brl(v.total) + '</td>' +
@@ -494,10 +495,12 @@
       : linhas.map(function(l){ return esc(l.forma) + ": " + brl(l.valor); }).join(" · ");
     var vendedorLinha = v.vendedor ? '<div class="venda-detalhe-linha"><span>Vendedor</span><span>' + esc(v.vendedor) + '</span></div>' : "";
     var descontoLinha = v.desconto ? '<div class="venda-detalhe-linha"><span>Desconto</span><span>- ' + brl(v.desconto) + '</span></div>' : "";
+    var assistLinha = v.assistencia ? '<div class="venda-detalhe-linha"><span>Origem</span><span><span class="badge badge-muted">Assistência Técnica</span></span></div>' : "";
     openModal("Detalhes da venda", (
       '<div class="venda-detalhe-linha"><span>Data</span><span>' + fmtDate(v.data) + '</span></div>' +
       '<div class="venda-detalhe-linha"><span>Horário</span><span>' + horaDaVenda(v) + '</span></div>' +
       '<div class="venda-detalhe-linha"><span>Cliente</span><span>' + esc(clienteNome(v.clienteId)) + '</span></div>' +
+      assistLinha +
       vendedorLinha +
       '<div class="venda-detalhe-linha"><span>Pagamento</span><span>' + pagamentoHtml + '</span></div>' +
       '<div class="venda-detalhe-itens">' + itensHtml + '</div>' +
@@ -1353,6 +1356,192 @@
         state.vendas = state.vendas.filter(function(v){ return v.id !== delId; });
         state.contas = state.contas.filter(function(c){ return c.vendaId !== delId; });
         saveData(); renderAll(); toast("Venda excluída");
+      }
+    }
+  });
+
+  // ================= ASSISTÊNCIA TÉCNICA =================
+  function assistenciaForm(a){
+    a = a || {};
+    var btnSaveText = a.id ? "Atualizar" : "Salvar";
+    return (
+      '<div class="field-row">' +
+        '<div class="field"><label>Cliente</label><div style="display:flex;gap:0.4rem;">' +
+          '<select id="fAssistCliente" style="flex:1;">' + clienteOptionsHtml(a.clienteId) + '</select>' +
+          '<button type="button" class="btn btn-ghost btn-sm" id="btnNovoClienteAssistInline" title="Cadastrar cliente">+</button>' +
+        '</div></div>' +
+        '<div class="field"><label>Vendedor</label><div style="display:flex;gap:0.4rem;">' +
+          '<select id="fAssistVendedor" style="flex:1;">' + vendedorOptionsHtml(a.vendedor) + '</select>' +
+          '<button type="button" class="btn btn-ghost btn-sm" id="btnNovoVendedorAssistInline" title="Adicionar vendedor">+</button>' +
+        '</div></div>' +
+      '</div>' +
+      '<div class="field"><label>Aparelho / Serviço</label><input id="fAssistDescricao" value="' + esc(a.descricao||"") + '" placeholder="Ex: Troca de tela iPhone 11"></div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>Valor previsto</label><input id="fAssistValor" type="number" min="0" step="0.01" value="' + (a.valor || "") + '"></div>' +
+        '<div class="field"><label>Data de entrada</label><input id="fAssistData" type="date" value="' + (a.dataEntrada || todayISO()) + '"></div>' +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">' + btnSaveText + '</button></div>'
+    );
+  }
+
+  function openAssistenciaModal(a){
+    var isEdit = !!a;
+    openModal(isEdit ? "Editar assistência" : "Nova assistência", assistenciaForm(a), function(body){
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+
+      body.querySelector("#btnNovoClienteAssistInline").addEventListener("click", function(){
+        var nome = prompt("Nome do novo cliente:");
+        if(!nome) return;
+        nome = nome.trim();
+        if(!nome) return;
+        var novoCliente = { id: uid(), nome: nome, cpf: "", telefone: "", email: "", obs: "" };
+        state.clientes.push(novoCliente);
+        saveData();
+        body.querySelector("#fAssistCliente").innerHTML = clienteOptionsHtml(novoCliente.id);
+        toast("Cliente cadastrado");
+      });
+
+      body.querySelector("#btnNovoVendedorAssistInline").addEventListener("click", function(){
+        var nome = prompt("Nome do novo vendedor:");
+        if(!nome) return;
+        nome = nome.trim();
+        if(!nome) return;
+        if(state.vendedores.indexOf(nome) === -1){
+          state.vendedores.push(nome);
+          saveData();
+        }
+        body.querySelector("#fAssistVendedor").innerHTML = vendedorOptionsHtml(nome);
+      });
+
+      body.querySelector("#btnSave").addEventListener("click", function(){
+        var clienteId = body.querySelector("#fAssistCliente").value;
+        var vendedor = body.querySelector("#fAssistVendedor").value || null;
+        var descricao = body.querySelector("#fAssistDescricao").value.trim();
+        var valor = parseFloat(body.querySelector("#fAssistValor").value) || 0;
+        var dataEntrada = body.querySelector("#fAssistData").value || todayISO();
+
+        if(!clienteId){ toast("Selecione o cliente"); return; }
+        if(!descricao){ toast("Descreva o aparelho ou serviço"); return; }
+        if(valor <= 0){ toast("Informe um valor válido"); return; }
+
+        if(isEdit){
+          a.clienteId = clienteId;
+          a.vendedor = vendedor;
+          a.descricao = descricao;
+          a.valor = valor;
+          a.dataEntrada = dataEntrada;
+          toast("Assistência atualizada");
+        } else {
+          state.assistencias.push({
+            id: uid(),
+            clienteId: clienteId,
+            vendedor: vendedor,
+            descricao: descricao,
+            valor: valor,
+            dataEntrada: dataEntrada,
+            status: "pendente",
+            vendaId: null
+          });
+          toast("Assistência registrada");
+        }
+        saveData();
+        closeModal();
+        renderAll();
+      });
+    });
+  }
+
+  document.getElementById("btnNovaAssistencia").addEventListener("click", function(){ openAssistenciaModal(null); });
+
+  function abrirConfirmarRetiradaAssistencia(assistId){
+    var a = state.assistencias.find(function(x){ return x.id === assistId; });
+    if(!a) return;
+    var formas = ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix"];
+    openModal("Confirmar retirada", (
+      '<p style="margin:0 0 1rem;color:var(--ink-dim);">' + esc(clienteNome(a.clienteId)) + ' retirou: ' + esc(a.descricao) + '</p>' +
+      '<div class="field"><label>Valor cobrado</label><input id="fAssistValorFinal" type="number" min="0" step="0.01" value="' + a.valor + '"></div>' +
+      '<div class="field"><label>Forma de pagamento</label></div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem;">' +
+        formas.map(function(f){ return '<button type="button" class="btn btn-ghost" data-forma-pagto="' + esc(f) + '">' + esc(f) + '</button>'; }).join("") +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button></div>'
+    ), function(body){
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelectorAll("[data-forma-pagto]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var forma = btn.dataset.formaPagto;
+          var valorFinal = parseFloat(body.querySelector("#fAssistValorFinal").value) || 0;
+          if(valorFinal <= 0){ toast("Informe um valor válido"); return; }
+          var novaVenda = {
+            id: uid(),
+            data: todayISO(),
+            criadoEm: new Date().toISOString(),
+            clienteId: a.clienteId,
+            vendedor: a.vendedor,
+            itens: [{ produtoId: null, nome: "Assistência técnica: " + a.descricao, qtd: 1, precoUnit: valorFinal }],
+            total: valorFinal,
+            desconto: 0,
+            pagamento: forma,
+            pagamentos: [{ forma: forma, valor: valorFinal }],
+            origemAssistenciaId: a.id,
+            assistencia: true
+          };
+          state.vendas.push(novaVenda);
+          a.status = "concluido";
+          a.valor = valorFinal;
+          a.vendaId = novaVenda.id;
+          saveData();
+          closeModal();
+          renderAll();
+          toast("Retirada confirmada e lançada no caixa");
+        });
+      });
+    });
+  }
+
+  function renderAssistencias(){
+    var tbody = document.getElementById("tblAssistencias");
+    var lista = state.assistencias.slice().sort(function(a,b){
+      if(a.status !== b.status) return a.status === "pendente" ? -1 : 1;
+      return b.dataEntrada.localeCompare(a.dataEntrada);
+    });
+    if(lista.length === 0){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Nenhuma assistência registrada.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = lista.map(function(a){
+      var badge = a.status === "concluido" ? '<span class="badge badge-ok">Concluído</span>' : '<span class="badge badge-warn">Pendente</span>';
+      return '<tr>' +
+        '<td class="cell-strong">' + esc(clienteNome(a.clienteId)) + '</td>' +
+        '<td>' + esc(a.vendedor || "-") + '</td>' +
+        '<td>' + esc(a.descricao) + '</td>' +
+        '<td>' + brl(a.valor) + '</td>' +
+        '<td>' + fmtDate(a.dataEntrada) + '</td>' +
+        '<td>' + badge + '</td>' +
+        '<td class="cell-actions">' +
+          (a.status === "pendente"
+            ? '<button class="btn btn-ghost btn-sm" data-edit-assist="' + a.id + '">Editar</button>' +
+              '<button class="btn btn-secondary btn-sm" data-retirada-assist="' + a.id + '">Confirmar retirada</button>'
+            : '') +
+          '<button class="btn btn-danger btn-sm" data-del-assist="' + a.id + '">Excluir</button>' +
+        '</td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  document.getElementById("tblAssistencias").addEventListener("click", function(e){
+    var editId = e.target.dataset.editAssist;
+    var retiradaId = e.target.dataset.retiradaAssist;
+    var delId = e.target.dataset.delAssist;
+    if(editId){
+      var a = state.assistencias.find(function(x){ return x.id === editId; });
+      if(a) openAssistenciaModal(a);
+    }
+    if(retiradaId) abrirConfirmarRetiradaAssistencia(retiradaId);
+    if(delId){
+      if(confirm("Excluir esta assistência?")){
+        state.assistencias = state.assistencias.filter(function(a){ return a.id !== delId; });
+        saveData(); renderAll(); toast("Assistência excluída");
       }
     }
   });
@@ -2327,6 +2516,7 @@
     renderClientes(document.getElementById("buscaClientes").value);
     renderProdutos(document.getElementById("buscaProdutos").value);
     renderVendas(document.getElementById("buscaVendas").value);
+    renderAssistencias();
     renderFinanceiro();
     renderAdmin();
   }
