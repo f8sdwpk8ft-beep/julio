@@ -1361,9 +1361,30 @@
   });
 
   // ================= ASSISTÊNCIA TÉCNICA =================
+  function assistenciaTotal(a){
+    return (a.maoDeObra || 0) + (a.itens || []).reduce(function(s,i){ return s + i.qtd * i.precoUnit; }, 0);
+  }
+
+  function restaurarEstoqueItens(itens){
+    (itens || []).forEach(function(i){
+      var p = state.produtos.find(function(p){ return p.id === i.produtoId; });
+      if(p) p.estoque = Math.max(0, p.estoque + i.qtd);
+    });
+  }
+
+  function baixarEstoqueItens(itens){
+    itens.forEach(function(i){
+      var p = state.produtos.find(function(p){ return p.id === i.produtoId; });
+      if(p) p.estoque = Math.max(0, p.estoque - i.qtd);
+    });
+  }
+
   function assistenciaForm(a){
     a = a || {};
     var btnSaveText = a.id ? "Atualizar" : "Salvar";
+    var itensRows = (a.itens && a.itens.length ? a.itens : [null]).map(function(item, idx){
+      return vendaFormRow(item, idx);
+    }).join("");
     return (
       '<div class="field-row">' +
         '<div class="field"><label>Cliente</label><div style="display:flex;gap:0.4rem;">' +
@@ -1376,9 +1397,17 @@
         '</div></div>' +
       '</div>' +
       '<div class="field"><label>Aparelho / Serviço</label><input id="fAssistDescricao" value="' + esc(a.descricao||"") + '" placeholder="Ex: Troca de tela iPhone 11"></div>' +
+      '<div class="field"><label>Peças / produtos utilizados (opcional)</label></div>' +
+      '<div class="venda-items" id="assistItems">' +
+        '<div id="assistRows">' + itensRows + '</div>' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="btnAddAssistItem" style="margin-top:0.4rem;">+ Adicionar peça/produto</button>' +
+      '</div>' +
       '<div class="field-row">' +
-        '<div class="field"><label>Valor previsto</label><input id="fAssistValor" type="number" min="0" step="0.01" value="' + (a.valor || "") + '"></div>' +
+        '<div class="field"><label>Mão de obra</label><input id="fAssistMaoDeObra" type="number" min="0" step="0.01" value="' + (a.maoDeObra || "") + '"></div>' +
         '<div class="field"><label>Data de entrada</label><input id="fAssistData" type="date" value="' + (a.dataEntrada || todayISO()) + '"></div>' +
+      '</div>' +
+      '<div class="venda-total-box">' +
+        '<div class="venda-total-linha venda-total-final"><span>Total previsto</span><span id="assistTotalValor">R$ 0,00</span></div>' +
       '</div>' +
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">' + btnSaveText + '</button></div>'
     );
@@ -1387,6 +1416,47 @@
   function openAssistenciaModal(a){
     var isEdit = !!a;
     openModal(isEdit ? "Editar assistência" : "Nova assistência", assistenciaForm(a), function(body){
+      var rowsEl = body.querySelector("#assistRows");
+      var rowCount = rowsEl.querySelectorAll(".venda-item-row").length;
+
+      function recalcTotal(){
+        var somaItens = 0;
+        rowsEl.querySelectorAll(".venda-item-row").forEach(function(row){
+          var qtd = parseFloat(row.querySelector(".v-qtd").value) || 0;
+          var preco = parseFloat(row.querySelector(".v-preco").value) || 0;
+          somaItens += qtd * preco;
+        });
+        var maoDeObra = parseFloat(body.querySelector("#fAssistMaoDeObra").value) || 0;
+        body.querySelector("#assistTotalValor").textContent = brl(somaItens + maoDeObra);
+      }
+
+      function bindRow(row){
+        bindComboProduto(row, function(prod){
+          row.querySelector(".v-preco").value = prod.preco;
+          recalcTotal();
+        });
+        row.querySelector(".v-qtd").addEventListener("input", recalcTotal);
+        row.querySelector(".v-preco").addEventListener("input", recalcTotal);
+        row.querySelector(".v-remove").addEventListener("click", function(){
+          if(rowsEl.querySelectorAll(".venda-item-row").length > 1){
+            row.remove();
+            recalcTotal();
+          }
+        });
+      }
+      rowsEl.querySelectorAll(".venda-item-row").forEach(bindRow);
+
+      body.querySelector("#btnAddAssistItem").addEventListener("click", function(){
+        var div = document.createElement("div");
+        div.innerHTML = vendaFormRow(null, rowCount++);
+        var row = div.firstElementChild;
+        rowsEl.appendChild(row);
+        bindRow(row);
+      });
+
+      body.querySelector("#fAssistMaoDeObra").addEventListener("input", recalcTotal);
+      recalcTotal();
+
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
 
       body.querySelector("#btnNovoClienteAssistInline").addEventListener("click", function(){
@@ -1417,18 +1487,44 @@
         var clienteId = body.querySelector("#fAssistCliente").value;
         var vendedor = body.querySelector("#fAssistVendedor").value || null;
         var descricao = body.querySelector("#fAssistDescricao").value.trim();
-        var valor = parseFloat(body.querySelector("#fAssistValor").value) || 0;
+        var maoDeObra = parseFloat(body.querySelector("#fAssistMaoDeObra").value) || 0;
         var dataEntrada = body.querySelector("#fAssistData").value || todayISO();
 
         if(!clienteId){ toast("Selecione o cliente"); return; }
         if(!descricao){ toast("Descreva o aparelho ou serviço"); return; }
-        if(valor <= 0){ toast("Informe um valor válido"); return; }
+
+        var itensNovos = [];
+        rowsEl.querySelectorAll(".venda-item-row").forEach(function(row){
+          var produtoId = row.querySelector(".v-produto-id").value;
+          var qtd = parseInt(row.querySelector(".v-qtd").value, 10) || 0;
+          var preco = parseFloat(row.querySelector(".v-preco").value) || 0;
+          if(!produtoId || qtd <= 0) return;
+          var prod = state.produtos.find(function(p){ return p.id === produtoId; });
+          if(!prod) return;
+          itensNovos.push({ produtoId: produtoId, nome: prod.nome, qtd: qtd, precoUnit: preco });
+        });
+
+        if(itensNovos.length === 0 && maoDeObra <= 0){ toast("Informe a mão de obra ou adicione ao menos uma peça"); return; }
+
+        if(isEdit) restaurarEstoqueItens(a.itens);
+        var faltouEstoque = itensNovos.find(function(i){
+          var p = state.produtos.find(function(p){ return p.id === i.produtoId; });
+          return p && i.qtd > p.estoque;
+        });
+        if(faltouEstoque){
+          if(isEdit) baixarEstoqueItens(a.itens);
+          var prodFaltante = state.produtos.find(function(p){ return p.id === faltouEstoque.produtoId; });
+          toast("Estoque insuficiente para " + (prodFaltante ? prodFaltante.nome : "a peça selecionada"));
+          return;
+        }
+        baixarEstoqueItens(itensNovos);
 
         if(isEdit){
           a.clienteId = clienteId;
           a.vendedor = vendedor;
           a.descricao = descricao;
-          a.valor = valor;
+          a.itens = itensNovos;
+          a.maoDeObra = maoDeObra;
           a.dataEntrada = dataEntrada;
           toast("Assistência atualizada");
         } else {
@@ -1437,7 +1533,8 @@
             clienteId: clienteId,
             vendedor: vendedor,
             descricao: descricao,
-            valor: valor,
+            itens: itensNovos,
+            maoDeObra: maoDeObra,
             dataEntrada: dataEntrada,
             status: "pendente",
             vendaId: null
@@ -1456,39 +1553,64 @@
   function abrirConfirmarRetiradaAssistencia(assistId){
     var a = state.assistencias.find(function(x){ return x.id === assistId; });
     if(!a) return;
+    var somaItens = (a.itens || []).reduce(function(s,i){ return s + i.qtd * i.precoUnit; }, 0);
+    var itensHtml = (a.itens || []).length
+      ? '<div class="fechamento-detalhes" style="margin-bottom:1rem;">' +
+          a.itens.map(function(i){
+            return '<div class="fechamento-detalhes-row"><span>' + i.qtd + 'x ' + esc(i.nome) + '</span><span>' + brl(i.qtd * i.precoUnit) + '</span></div>';
+          }).join("") +
+        '</div>'
+      : "";
     var formas = ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix"];
     openModal("Confirmar retirada", (
       '<p style="margin:0 0 1rem;color:var(--ink-dim);">' + esc(clienteNome(a.clienteId)) + ' retirou: ' + esc(a.descricao) + '</p>' +
-      '<div class="field"><label>Valor cobrado</label><input id="fAssistValorFinal" type="number" min="0" step="0.01" value="' + a.valor + '"></div>' +
-      '<div class="field"><label>Forma de pagamento</label></div>' +
+      itensHtml +
+      '<div class="field"><label>Mão de obra</label><input id="fAssistMaoDeObraFinal" type="number" min="0" step="0.01" value="' + (a.maoDeObra || 0) + '"></div>' +
+      '<div class="venda-total-box">' +
+        '<div class="venda-total-linha venda-total-final"><span>Total a cobrar</span><span id="assistRetiradaTotal">' + brl(somaItens + (a.maoDeObra || 0)) + '</span></div>' +
+      '</div>' +
+      '<div class="field" style="margin-top:1rem;"><label>Forma de pagamento</label></div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem;">' +
         formas.map(function(f){ return '<button type="button" class="btn btn-ghost" data-forma-pagto="' + esc(f) + '">' + esc(f) + '</button>'; }).join("") +
       '</div>' +
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button></div>'
     ), function(body){
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelector("#fAssistMaoDeObraFinal").addEventListener("input", function(){
+        var maoDeObraFinal = parseFloat(body.querySelector("#fAssistMaoDeObraFinal").value) || 0;
+        body.querySelector("#assistRetiradaTotal").textContent = brl(somaItens + maoDeObraFinal);
+      });
       body.querySelectorAll("[data-forma-pagto]").forEach(function(btn){
         btn.addEventListener("click", function(){
           var forma = btn.dataset.formaPagto;
-          var valorFinal = parseFloat(body.querySelector("#fAssistValorFinal").value) || 0;
-          if(valorFinal <= 0){ toast("Informe um valor válido"); return; }
+          var maoDeObraFinal = parseFloat(body.querySelector("#fAssistMaoDeObraFinal").value) || 0;
+          var totalFinal = somaItens + maoDeObraFinal;
+          if(totalFinal <= 0){ toast("Informe um valor válido"); return; }
+
+          var itensVenda = (a.itens || []).map(function(i){
+            return { produtoId: i.produtoId, nome: i.nome, qtd: i.qtd, precoUnit: i.precoUnit };
+          });
+          if(maoDeObraFinal > 0){
+            itensVenda.push({ produtoId: null, nome: "Mão de obra: " + a.descricao, qtd: 1, precoUnit: maoDeObraFinal });
+          }
+
           var novaVenda = {
             id: uid(),
             data: todayISO(),
             criadoEm: new Date().toISOString(),
             clienteId: a.clienteId,
             vendedor: a.vendedor,
-            itens: [{ produtoId: null, nome: "Assistência técnica: " + a.descricao, qtd: 1, precoUnit: valorFinal }],
-            total: valorFinal,
+            itens: itensVenda,
+            total: totalFinal,
             desconto: 0,
             pagamento: forma,
-            pagamentos: [{ forma: forma, valor: valorFinal }],
+            pagamentos: [{ forma: forma, valor: totalFinal }],
             origemAssistenciaId: a.id,
             assistencia: true
           };
           state.vendas.push(novaVenda);
           a.status = "concluido";
-          a.valor = valorFinal;
+          a.maoDeObra = maoDeObraFinal;
           a.vendaId = novaVenda.id;
           saveData();
           closeModal();
@@ -1511,11 +1633,12 @@
     }
     tbody.innerHTML = lista.map(function(a){
       var badge = a.status === "concluido" ? '<span class="badge badge-ok">Concluído</span>' : '<span class="badge badge-warn">Pendente</span>';
+      var descricaoCompleta = esc(a.descricao) + ((a.itens && a.itens.length) ? ' <span class="cell-sub">(' + a.itens.length + ' peça' + (a.itens.length > 1 ? "s" : "") + ')</span>' : "");
       return '<tr>' +
         '<td class="cell-strong">' + esc(clienteNome(a.clienteId)) + '</td>' +
         '<td>' + esc(a.vendedor || "-") + '</td>' +
-        '<td>' + esc(a.descricao) + '</td>' +
-        '<td>' + brl(a.valor) + '</td>' +
+        '<td>' + descricaoCompleta + '</td>' +
+        '<td>' + brl(assistenciaTotal(a)) + '</td>' +
         '<td>' + fmtDate(a.dataEntrada) + '</td>' +
         '<td>' + badge + '</td>' +
         '<td class="cell-actions">' +
@@ -1539,7 +1662,7 @@
     }
     if(retiradaId) abrirConfirmarRetiradaAssistencia(retiradaId);
     if(delId){
-      if(confirm("Excluir esta assistência?")){
+      if(confirm("Excluir esta assistência? O estoque das peças já usadas não será restaurado automaticamente.")){
         state.assistencias = state.assistencias.filter(function(a){ return a.id !== delId; });
         saveData(); renderAll(); toast("Assistência excluída");
       }

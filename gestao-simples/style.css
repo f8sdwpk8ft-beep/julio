@@ -253,6 +253,7 @@ tbody td{padding:1rem 0.8rem;border-bottom:1px solid var(--line);vertical-align:
 tbody tr:last-child td{border-bottom:none;}
 tbody tr:hover{background:var(--surface-2, rgba(0,0,0,0.02));}
 .cell-strong{font-weight:700;}
+.cell-sub{color:var(--ink-faint);font-size:0.8rem;font-weight:500;}
 .cell-actions{display:flex;gap:0.4rem;justify-content:flex-end;}
 .empty-row td{text-align:center;color:var(--ink-faint);padding:2rem 0;}
 
