@@ -1879,7 +1879,10 @@
       var qtdPecas = (a.itens || []).length;
       var descricaoCompleta = esc(assistenciaDescricao(a)) +
         (qtdPecas ? ' <span class="cell-sub">(' + qtdPecas + (qtdPecas > 1 ? " itens" : " item") + ')</span>' : "");
-      return '<tr>' +
+      var rowAttrs = a.status === "pendente"
+        ? ' class="vd-row" data-row-assist="' + a.id + '" title="Clique para confirmar a retirada"'
+        : "";
+      return '<tr' + rowAttrs + '>' +
         '<td class="cell-strong">' + esc(clienteNome(a.clienteId)) + '</td>' +
         '<td>' + esc(a.vendedor || "-") + '</td>' +
         '<td>' + descricaoCompleta + '</td>' +
@@ -1904,14 +1907,18 @@
     if(editId){
       var a = state.assistencias.find(function(x){ return x.id === editId; });
       if(a) openAssistenciaModal(a);
+      return;
     }
-    if(retiradaId) abrirConfirmarRetiradaAssistencia(retiradaId);
+    if(retiradaId){ abrirConfirmarRetiradaAssistencia(retiradaId); return; }
     if(delId){
       if(confirm("Excluir esta assistência? O estoque das peças já usadas não será restaurado automaticamente.")){
         state.assistencias = state.assistencias.filter(function(a){ return a.id !== delId; });
         saveData(); renderAll(); toast("Assistência excluída");
       }
+      return;
     }
+    var row = e.target.closest("[data-row-assist]");
+    if(row) abrirConfirmarRetiradaAssistencia(row.dataset.rowAssist);
   });
 
   // ================= FINANCEIRO =================
