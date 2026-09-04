@@ -3328,12 +3328,10 @@
     var estoqueBaixo = state.produtos.filter(function(p){
       return p.estoqueMinimo > 0 && p.estoque <= p.estoqueMinimo;
     });
-    var container = document.getElementById("alertasContainer");
-    if(vencidas.length === 0 && estoqueBaixo.length === 0){
-      container.innerHTML = "";
-      return;
-    }
-    var htmlContas = vencidas.map(function(c){
+
+    // Despesas vencidas ficam no topo (em qualquer tela) por serem mais urgentes;
+    // estoque baixo fica no final do Início, pra não competir com o resto do painel.
+    document.getElementById("alertasContainer").innerHTML = vencidas.map(function(c){
       return '<div class="alerta-item" data-conta-id="' + esc(c.id) + '" title="Clique para ver detalhes">' +
         '<div class="alerta-conteudo">' +
           '<div class="alerta-descricao">' + esc(c.descricao) + '</div>' +
@@ -3342,7 +3340,8 @@
         '<div class="alerta-valor">' + brl(c.valor) + '</div>' +
       '</div>';
     }).join("");
-    var htmlEstoque = estoqueBaixo.map(function(p){
+
+    document.getElementById("estoqueBaixoContainer").innerHTML = estoqueBaixo.map(function(p){
       return '<div class="alerta-item" data-produto-id="' + esc(p.id) + '" title="Clique para ver o produto">' +
         '<div class="alerta-conteudo">' +
           '<div class="alerta-descricao">Estoque baixo: ' + esc(p.nome) + '</div>' +
@@ -3351,17 +3350,17 @@
         '<div class="alerta-valor" style="color:var(--danger);">' + p.estoque + '</div>' +
       '</div>';
     }).join("");
-    container.innerHTML = htmlContas + htmlEstoque;
   }
 
   // O clique nos alertas é ligado uma única vez (fora de renderAlertas) para
   // não empilhar um listener novo a cada renderização.
   document.getElementById("alertasContainer").addEventListener("click", function(e){
-    var alerta = e.target.closest(".alerta-item");
-    if(!alerta) return;
-    if(alerta.dataset.contaId){
-      abrirDetalhesDespesas();
-    } else if(alerta.dataset.produtoId){
+    var alerta = e.target.closest(".alerta-item[data-conta-id]");
+    if(alerta) abrirDetalhesDespesas();
+  });
+  document.getElementById("estoqueBaixoContainer").addEventListener("click", function(e){
+    var alerta = e.target.closest(".alerta-item[data-produto-id]");
+    if(alerta){
       showView("produtos");
       openProdutoModal(alerta.dataset.produtoId);
     }
