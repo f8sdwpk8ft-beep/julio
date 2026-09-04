@@ -564,8 +564,14 @@
     openModal("Vender aparelho", (
       '<p style="margin:0 0 1rem;color:var(--ink-dim);">' + esc(c.modelo) + (c.imei ? ' — IMEI ' + esc(c.imei) : '') + '</p>' +
       '<div class="field-row">' +
-        '<div class="field"><label>Cliente</label><select id="fCelVendaCliente">' + clienteOptionsHtml(null, "Consumidor") + '</select></div>' +
-        '<div class="field"><label>Vendedor</label><select id="fCelVendaVendedor">' + vendedorOptionsHtml(null) + '</select></div>' +
+        '<div class="field"><label>Cliente</label><div style="display:flex;gap:0.4rem;">' +
+          '<select id="fCelVendaCliente" style="flex:1;">' + clienteOptionsHtml(null, "Consumidor") + '</select>' +
+          '<button type="button" class="btn btn-ghost btn-sm" id="btnNovoClienteCelInline" title="Adicionar cliente">+</button>' +
+        '</div></div>' +
+        '<div class="field"><label>Vendedor</label><div style="display:flex;gap:0.4rem;">' +
+          '<select id="fCelVendaVendedor" style="flex:1;">' + vendedorOptionsHtml(null) + '</select>' +
+          '<button type="button" class="btn btn-ghost btn-sm" id="btnNovoVendedorCelInline" title="Adicionar vendedor">+</button>' +
+        '</div></div>' +
       '</div>' +
       '<div class="field"><label>Valor da venda</label><input id="fCelVendaValor" type="number" min="0" step="0.01" value="' + c.preco + '"></div>' +
       '<div class="field" style="margin-top:0.5rem;"><label>Forma de pagamento</label></div>' +
@@ -575,6 +581,28 @@
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button></div>'
     ), function(body){
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelector("#btnNovoClienteCelInline").addEventListener("click", function(){
+        var nome = prompt("Nome do novo cliente:");
+        if(!nome) return;
+        nome = nome.trim();
+        if(!nome) return;
+        var novoCliente = { id: uid(), nome: nome, cpf: "", cnpj: "", telefone: "", email: "", obs: "" };
+        state.clientes.push(novoCliente);
+        saveData();
+        body.querySelector("#fCelVendaCliente").innerHTML = clienteOptionsHtml(novoCliente.id, "Consumidor");
+        toast("Cliente cadastrado");
+      });
+      body.querySelector("#btnNovoVendedorCelInline").addEventListener("click", function(){
+        var nome = prompt("Nome do novo vendedor:");
+        if(!nome) return;
+        nome = nome.trim();
+        if(!nome) return;
+        if(state.vendedores.indexOf(nome) === -1){
+          state.vendedores.push(nome);
+          saveData();
+        }
+        body.querySelector("#fCelVendaVendedor").innerHTML = vendedorOptionsHtml(nome);
+      });
       body.querySelectorAll("[data-forma-pagto]").forEach(function(btn){
         btn.addEventListener("click", function(){
           var forma = btn.dataset.formaPagto;
@@ -1294,10 +1322,14 @@
   document.getElementById("finVendasHojeRow").addEventListener("click", abrirVendasHoje);
 
   function vendaFormRow(item, idx){
-    var produtoAtual = item ? state.produtos.find(function(p){ return p.id === item.produtoId; }) : null;
+    // Um item pode não estar ligado a um produto do estoque (peça avulsa de
+    // assistência, celular do Estoque Celular, "Mão de obra"...); nesses casos
+    // mantém o nome já salvo em vez de deixar a busca em branco.
+    var produtoAtual = item && item.produtoId ? state.produtos.find(function(p){ return p.id === item.produtoId; }) : null;
+    var nomeAtual = produtoAtual ? produtoAtual.nome : (item ? item.nome : "");
     return (
       '<div class="venda-item-row" data-row="' + idx + '">' +
-        comboProdutoHtml(item ? item.produtoId : "", produtoAtual ? produtoAtual.nome : "") +
+        comboProdutoHtml(item ? item.produtoId : "", nomeAtual, true) +
         '<input class="v-qtd" type="number" min="1" value="' + (item ? item.qtd : 1) + '">' +
         '<input class="v-preco" type="number" min="0" step="0.01" value="' + (item ? item.precoUnit : 0) + '">' +
         '<button type="button" class="btn btn-icon btn-danger v-remove" title="Remover">&times;</button>' +
@@ -1607,15 +1639,23 @@
         var valid = true;
         rowsEl.querySelectorAll(".venda-item-row").forEach(function(row){
           var produtoId = row.querySelector(".v-produto-id").value;
+          var nomeLivre = row.querySelector(".v-produto-busca").value.trim();
           var qtd = parseInt(row.querySelector(".v-qtd").value, 10) || 0;
           var preco = parseFloat(row.querySelector(".v-preco").value) || 0;
-          if(!produtoId || qtd <= 0){ valid = false; return; }
-          var prod = state.produtos.find(function(p){ return p.id === produtoId; });
-          if(!prod){ valid = false; return; }
-          if(qtd > prod.estoque){ valid = false; toast("Estoque insuficiente para " + prod.nome); return; }
-          itens.push({ produtoId: produtoId, nome: prod.nome, qtd: qtd, precoUnit: preco });
+          if(qtd <= 0) return;
+          if(produtoId){
+            var prod = state.produtos.find(function(p){ return p.id === produtoId; });
+            if(!prod){ valid = false; return; }
+            if(qtd > prod.estoque){ valid = false; toast("Estoque insuficiente para " + prod.nome); return; }
+            itens.push({ produtoId: produtoId, nome: prod.nome, qtd: qtd, precoUnit: preco });
+          } else if(nomeLivre && preco > 0){
+            // item sem vínculo de estoque (peça avulsa, celular, mão de obra...): mantém como está
+            itens.push({ produtoId: null, nome: nomeLivre, qtd: qtd, precoUnit: preco });
+          } else {
+            valid = false;
+          }
         });
-        if(!valid || itens.length === 0){ toast("Verifique os itens da venda (selecione o produto pela busca)"); return; }
+        if(!valid || itens.length === 0){ toast("Verifique os itens da venda (selecione o produto pela busca ou informe nome e valor)"); return; }
 
         var subtotal = itens.reduce(function(sum, i){ return sum + i.qtd * i.precoUnit; }, 0);
         var desconto = Math.min(parseFloat(body.querySelector("#fDesconto").value) || 0, subtotal);
@@ -1710,7 +1750,7 @@
 
             itens.forEach(function(i){
               var prod = state.produtos.find(function(p){ return p.id === i.produtoId; });
-              prod.estoque = Math.max(0, prod.estoque - i.qtd);
+              if(prod) prod.estoque = Math.max(0, prod.estoque - i.qtd);
             });
 
             state.vendas.push(novaVenda);
