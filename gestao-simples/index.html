@@ -34,6 +34,18 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
         Produtos
       </a></li>
+      <li><a data-view="estoquecelular">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>
+        Estoque Celular
+      </a></li>
+      <li><a data-view="quebra">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        Quebra
+      </a></li>
+      <li><a data-view="pecas">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.6 2H4a2 2 0 0 0-2 2v8.6a2 2 0 0 0 .6 1.4l9 9a2 2 0 0 0 2.8 0l7.6-7.6a2 2 0 0 0 0-2.8l-9-9A2 2 0 0 0 12.6 2Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+        Peças
+      </a></li>
       <li><a data-view="clientes">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>
         Clientes
@@ -192,6 +204,73 @@
             <table>
               <thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Custo</th><th>Estoque</th><th></th></tr></thead>
               <tbody id="tblProdutos"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ESTOQUE CELULAR -->
+      <section id="view-estoquecelular" class="view hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Estoque Celular</h2>
+            <div style="display:flex;gap:0.6rem;">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="buscaCelulares" placeholder="Buscar por modelo ou IMEI...">
+              </div>
+              <button class="kpi-eye" id="eyeCustoCelular" type="button" aria-label="Mostrar custo" title="Mostrar custo (admin)" aria-pressed="false"></button>
+              <button class="btn btn-primary" id="btnNovoCelular">+ Novo aparelho</button>
+            </div>
+          </div>
+          <div class="vd-filtros" style="margin:0 0 1rem;">
+            <button type="button" class="btn btn-sm btn-primary" data-cel-filtro="todos">Todos</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-cel-filtro="disponivel">Disponível</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-cel-filtro="vendido">Vendido</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Modelo</th><th>Cor</th><th>IMEI</th><th>Preço</th><th>Custo</th><th>Status</th><th></th></tr></thead>
+              <tbody id="tblCelulares"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- QUEBRA (GARANTIA) -->
+      <section id="view-quebra" class="view hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Quebra (Garantia)</h2>
+            <button class="btn btn-primary" id="btnNovaQuebra">+ Registrar quebra</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Data</th><th>Tipo</th><th>Peça / Produto</th><th>Qtd</th><th>Motivo</th><th>Cliente</th><th></th></tr></thead>
+              <tbody id="tblQuebras"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- PEÇAS (tabela de preços de referência) -->
+      <section id="view-pecas" class="view hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Peças</h2>
+            <div style="display:flex;gap:0.6rem;">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="buscaPecas" placeholder="Buscar peça...">
+              </div>
+              <button class="btn btn-primary" id="btnNovaPeca">+ Nova peça</button>
+            </div>
+          </div>
+          <p style="margin:0 0 1rem;color:var(--ink-dim);font-size:0.85rem;">Tabela de preços de referência (sem controle de estoque) — aparece como sugestão ao registrar uma peça avulsa na Assistência Técnica.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nome</th><th>Valor</th><th></th></tr></thead>
+              <tbody id="tblPecas"></tbody>
             </table>
           </div>
         </div>

@@ -3,7 +3,7 @@
 
   var STORAGE_KEY = "gestao-simples-data-v1";
 
-  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], assistencias: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], categorias: ["Produtos", "Assistência Técnica"], vendedores: [], comissaoPercentual: 2, nomeLoja: "" };
+  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], assistencias: [], celulares: [], quebras: [], pecasPreco: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], categorias: ["Produtos", "Assistência Técnica"], vendedores: [], comissaoPercentual: 2, nomeLoja: "" };
 
   function loadData(){
     try{
@@ -88,8 +88,8 @@
   });
 
   // ---------- Navigation ----------
-  var views = ["dashboard","vendas","assistencia","produtos","clientes","financeiro","admin"];
-  var titles = { dashboard:"Início", vendas:"Vendas", assistencia:"Assistência Técnica", produtos:"Produtos", clientes:"Clientes", financeiro:"Financeiro", admin:"Admin" };
+  var views = ["dashboard","vendas","assistencia","produtos","estoquecelular","quebra","pecas","clientes","financeiro","admin"];
+  var titles = { dashboard:"Início", vendas:"Vendas", assistencia:"Assistência Técnica", produtos:"Produtos", estoquecelular:"Estoque Celular", quebra:"Quebra (Garantia)", pecas:"Peças", clientes:"Clientes", financeiro:"Financeiro", admin:"Admin" };
   var adminDesbloqueado = false;
 
   function mostrarView(name){
@@ -263,6 +263,13 @@
 
   function produtoForm(p){
     p = p || {};
+    // Custo é informação de administrador: se o produto já existe e o admin
+    // ainda não liberou a visualização nesta sessão, o campo fica mascarado.
+    var custoOculto = !!(p.id && !custoVisivel);
+    var custoCampoHtml = custoOculto
+      ? '<input id="fCusto" type="text" value="R$ ••••" disabled>' +
+        '<button type="button" class="kpi-eye" id="btnRevelarCustoForm" title="Mostrar custo (admin)">' + EYE_OFF_SVG + '</button>'
+      : '<input id="fCusto" type="number" min="0" step="0.01" value="' + (p.custo != null ? p.custo : "") + '">';
     return (
       '<div class="field"><label>Nome</label><input id="fNome" value="' + esc(p.nome||"") + '" placeholder="Nome do produto"></div>' +
       '<div class="field"><label>Categoria</label><div style="display:flex;gap:0.4rem;">' +
@@ -271,7 +278,7 @@
       '</div></div>' +
       '<div class="field-row">' +
         '<div class="field"><label>Preço de venda</label><input id="fPreco" type="number" min="0" step="0.01" value="' + (p.preco != null ? p.preco : "") + '"></div>' +
-        '<div class="field"><label>Custo</label><input id="fCusto" type="number" min="0" step="0.01" value="' + (p.custo != null ? p.custo : "") + '"></div>' +
+        '<div class="field"><label>Custo</label><div style="display:flex;gap:0.4rem;align-items:center;">' + custoCampoHtml + '</div></div>' +
       '</div>' +
       '<div class="field"><label>Estoque atual</label><input id="fEstoque" type="number" min="0" value="' + (p.estoque != null ? p.estoque : 0) + '"></div>' +
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">Salvar</button></div>'
@@ -282,6 +289,18 @@
     var p = id ? state.produtos.find(function(x){ return x.id === id; }) : null;
     openModal(p ? "Editar produto" : "Novo produto", produtoForm(p), function(body){
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      var btnRevelarCusto = body.querySelector("#btnRevelarCustoForm");
+      if(btnRevelarCusto){
+        btnRevelarCusto.addEventListener("click", function(){
+          pedirSenhaAdmin(function(){
+            custoVisivel = true;
+            renderProdutos(document.getElementById("buscaProdutos").value);
+            renderEstoqueCelular();
+            atualizarOlhoCusto();
+            openProdutoModal(id);
+          });
+        });
+      }
       body.querySelector("#btnNovaCategoria").addEventListener("click", function(){
         var nome = prompt("Nome da nova categoria:");
         if(!nome) return;
@@ -296,11 +315,12 @@
       body.querySelector("#btnSave").addEventListener("click", function(){
         var nome = body.querySelector("#fNome").value.trim();
         if(!nome){ toast("Informe o nome do produto"); return; }
+        var custoInput = body.querySelector("#fCusto");
         var data = {
           nome: nome,
           categoria: body.querySelector("#fCategoria").value.trim(),
           preco: parseFloat(body.querySelector("#fPreco").value) || 0,
-          custo: parseFloat(body.querySelector("#fCusto").value) || 0,
+          custo: custoInput.disabled ? (p ? p.custo : 0) : (parseFloat(custoInput.value) || 0),
           estoque: parseInt(body.querySelector("#fEstoque").value, 10) || 0
         };
         if(p){
@@ -327,6 +347,440 @@
       if(confirm("Excluir este produto?")){
         state.produtos = state.produtos.filter(function(p){ return p.id !== delId; });
         saveData(); renderAll(); toast("Produto excluído");
+      }
+    }
+  });
+
+  // ================= PEÇAS (tabela de preços de referência, sem estoque) =================
+  function renderPecas(filter){
+    var tbody = document.getElementById("tblPecas");
+    var list = state.pecasPreco.filter(function(pc){
+      if(!filter) return true;
+      return pc.nome.toLowerCase().indexOf(filter.toLowerCase()) !== -1;
+    }).slice().sort(function(a,b){ return a.nome.localeCompare(b.nome); });
+    if(list.length === 0){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="3">Nenhuma peça cadastrada.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(function(pc){
+      return '<tr>' +
+        '<td class="cell-strong">' + esc(pc.nome) + '</td>' +
+        '<td>' + brl(pc.valor) + '</td>' +
+        '<td class="cell-actions">' +
+          '<button class="btn btn-ghost btn-sm" data-edit-peca="' + pc.id + '">Editar</button>' +
+          '<button class="btn btn-danger btn-sm" data-del-peca="' + pc.id + '">Excluir</button>' +
+        '</td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  function pecaForm(pc){
+    pc = pc || {};
+    return (
+      '<div class="field"><label>Nome da peça</label><input id="fPecaNome" value="' + esc(pc.nome||"") + '" placeholder="Ex: Tela iPhone 11"></div>' +
+      '<div class="field"><label>Valor de referência</label><input id="fPecaValor" type="number" min="0" step="0.01" value="' + (pc.valor != null ? pc.valor : "") + '"></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">Salvar</button></div>'
+    );
+  }
+
+  function openPecaModal(id){
+    var pc = id ? state.pecasPreco.find(function(x){ return x.id === id; }) : null;
+    openModal(pc ? "Editar peça" : "Nova peça", pecaForm(pc), function(body){
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelector("#btnSave").addEventListener("click", function(){
+        var nome = body.querySelector("#fPecaNome").value.trim();
+        if(!nome){ toast("Informe o nome da peça"); return; }
+        var data = {
+          nome: nome,
+          valor: parseFloat(body.querySelector("#fPecaValor").value) || 0
+        };
+        if(pc){
+          Object.assign(pc, data);
+        } else {
+          data.id = uid();
+          state.pecasPreco.push(data);
+        }
+        saveData();
+        closeModal();
+        renderAll();
+        toast("Peça salva");
+      });
+    });
+  }
+
+  document.getElementById("btnNovaPeca").addEventListener("click", function(){ openPecaModal(null); });
+  document.getElementById("buscaPecas").addEventListener("input", function(e){ renderPecas(e.target.value); });
+  document.getElementById("tblPecas").addEventListener("click", function(e){
+    var editId = e.target.dataset.editPeca;
+    var delId = e.target.dataset.delPeca;
+    if(editId) openPecaModal(editId);
+    if(delId){
+      if(confirm("Excluir esta peça da tabela de preços?")){
+        state.pecasPreco = state.pecasPreco.filter(function(pc){ return pc.id !== delId; });
+        saveData(); renderAll(); toast("Peça excluída");
+      }
+    }
+  });
+
+  // ================= ESTOQUE CELULAR (cadastro por aparelho, com IMEI) =================
+  var celularStatusFiltro = "todos";
+
+  function renderEstoqueCelular(filter){
+    filter = filter != null ? filter : document.getElementById("buscaCelulares").value;
+    var tbody = document.getElementById("tblCelulares");
+    var filterLower = (filter || "").toLowerCase();
+    var list = state.celulares.filter(function(c){
+      if(celularStatusFiltro !== "todos" && c.status !== celularStatusFiltro) return false;
+      if(!filterLower) return true;
+      return c.modelo.toLowerCase().indexOf(filterLower) !== -1 || (c.imei||"").toLowerCase().indexOf(filterLower) !== -1;
+    }).sort(function(a,b){ return (b.dataEntrada||"").localeCompare(a.dataEntrada||""); });
+    if(list.length === 0){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Nenhum aparelho cadastrado.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(function(c){
+      var badge = c.status === "vendido" ? '<span class="badge badge-ok">Vendido</span>' : '<span class="badge badge-warn">Disponível</span>';
+      return '<tr>' +
+        '<td class="cell-strong">' + esc(c.modelo) + '</td>' +
+        '<td>' + esc(c.cor || "-") + (c.condicao ? ' <span class="cell-sub">(' + esc(c.condicao) + ')</span>' : '') + '</td>' +
+        '<td>' + esc(c.imei || "-") + '</td>' +
+        '<td>' + brl(c.preco) + '</td>' +
+        '<td>' + (custoVisivel ? brl(c.custo) : '<span class="valor-oculto">R$ &bull;&bull;&bull;&bull;</span>') + '</td>' +
+        '<td>' + badge + '</td>' +
+        '<td class="cell-actions">' +
+          '<button class="btn btn-ghost btn-sm" data-edit-celular="' + c.id + '">Editar</button>' +
+          (c.status === "disponivel" ? '<button class="btn btn-secondary btn-sm" data-vender-celular="' + c.id + '">Vender</button>' : '') +
+          '<button class="btn btn-danger btn-sm" data-del-celular="' + c.id + '">Excluir</button>' +
+        '</td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  var CONDICOES_CELULAR = ["Novo", "Seminovo", "Usado"];
+
+  function celularForm(c){
+    c = c || {};
+    var custoOculto = !!(c.id && !custoVisivel);
+    var custoCampoHtml = custoOculto
+      ? '<input id="fCelCusto" type="text" value="R$ ••••" disabled>' +
+        '<button type="button" class="kpi-eye" id="btnRevelarCustoCelular" title="Mostrar custo (admin)">' + EYE_OFF_SVG + '</button>'
+      : '<input id="fCelCusto" type="number" min="0" step="0.01" value="' + (c.custo != null ? c.custo : "") + '">';
+    return (
+      '<div class="field"><label>Modelo</label><input id="fCelModelo" value="' + esc(c.modelo||"") + '" placeholder="Ex: iPhone 11 128GB"></div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>Cor</label><input id="fCelCor" value="' + esc(c.cor||"") + '"></div>' +
+        '<div class="field"><label>Condição</label><select id="fCelCondicao">' +
+          CONDICOES_CELULAR.map(function(op){ return '<option' + (c.condicao === op ? " selected" : "") + '>' + op + '</option>'; }).join("") +
+        '</select></div>' +
+      '</div>' +
+      '<div class="field"><label>IMEI</label><input id="fCelImei" value="' + esc(c.imei||"") + '" placeholder="000000000000000"></div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>Preço de venda</label><input id="fCelPreco" type="number" min="0" step="0.01" value="' + (c.preco != null ? c.preco : "") + '"></div>' +
+        '<div class="field"><label>Custo</label><div style="display:flex;gap:0.4rem;align-items:center;">' + custoCampoHtml + '</div></div>' +
+      '</div>' +
+      '<div class="field"><label>Data de entrada</label><input id="fCelData" type="date" value="' + (c.dataEntrada || todayISO()) + '"></div>' +
+      '<div class="field"><label>Observações</label><textarea id="fCelObs" rows="2">' + esc(c.obs||"") + '</textarea></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">Salvar</button></div>'
+    );
+  }
+
+  function openCelularModal(id){
+    var c = id ? state.celulares.find(function(x){ return x.id === id; }) : null;
+    openModal(c ? "Editar aparelho" : "Novo aparelho", celularForm(c), function(body){
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      var btnRevelar = body.querySelector("#btnRevelarCustoCelular");
+      if(btnRevelar){
+        btnRevelar.addEventListener("click", function(){
+          pedirSenhaAdmin(function(){
+            custoVisivel = true;
+            renderProdutos(document.getElementById("buscaProdutos").value);
+            renderEstoqueCelular();
+            atualizarOlhoCusto();
+            openCelularModal(id);
+          });
+        });
+      }
+      body.querySelector("#btnSave").addEventListener("click", function(){
+        var modelo = body.querySelector("#fCelModelo").value.trim();
+        if(!modelo){ toast("Informe o modelo do aparelho"); return; }
+        var custoInput = body.querySelector("#fCelCusto");
+        var data = {
+          modelo: modelo,
+          cor: body.querySelector("#fCelCor").value.trim(),
+          condicao: body.querySelector("#fCelCondicao").value,
+          imei: body.querySelector("#fCelImei").value.trim(),
+          preco: parseFloat(body.querySelector("#fCelPreco").value) || 0,
+          custo: custoInput.disabled ? (c ? c.custo : 0) : (parseFloat(custoInput.value) || 0),
+          dataEntrada: body.querySelector("#fCelData").value || todayISO(),
+          obs: body.querySelector("#fCelObs").value.trim()
+        };
+        if(c){
+          Object.assign(c, data);
+        } else {
+          data.id = uid();
+          data.status = "disponivel";
+          data.vendaId = null;
+          state.celulares.push(data);
+        }
+        saveData();
+        closeModal();
+        renderAll();
+        toast("Aparelho salvo");
+      });
+    });
+  }
+
+  document.getElementById("btnNovoCelular").addEventListener("click", function(){ openCelularModal(null); });
+  document.getElementById("buscaCelulares").addEventListener("input", function(e){ renderEstoqueCelular(e.target.value); });
+  document.querySelectorAll("[data-cel-filtro]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      celularStatusFiltro = btn.dataset.celFiltro;
+      document.querySelectorAll("[data-cel-filtro]").forEach(function(b){
+        b.classList.toggle("btn-primary", b.dataset.celFiltro === celularStatusFiltro);
+        b.classList.toggle("btn-ghost", b.dataset.celFiltro !== celularStatusFiltro);
+      });
+      renderEstoqueCelular();
+    });
+  });
+
+  document.getElementById("tblCelulares").addEventListener("click", function(e){
+    var editId = e.target.dataset.editCelular;
+    var venderId = e.target.dataset.venderCelular;
+    var delId = e.target.dataset.delCelular;
+    if(editId) openCelularModal(editId);
+    if(venderId) abrirVenderCelular(venderId);
+    if(delId){
+      if(confirm("Excluir este aparelho do estoque?")){
+        state.celulares = state.celulares.filter(function(c){ return c.id !== delId; });
+        saveData(); renderAll(); toast("Aparelho excluído");
+      }
+    }
+  });
+
+  function abrirVenderCelular(celularId){
+    var c = state.celulares.find(function(x){ return x.id === celularId; });
+    if(!c) return;
+    var formas = ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix"];
+    openModal("Vender aparelho", (
+      '<p style="margin:0 0 1rem;color:var(--ink-dim);">' + esc(c.modelo) + (c.imei ? ' — IMEI ' + esc(c.imei) : '') + '</p>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>Cliente</label><select id="fCelVendaCliente">' + clienteOptionsHtml(null, "Consumidor") + '</select></div>' +
+        '<div class="field"><label>Vendedor</label><select id="fCelVendaVendedor">' + vendedorOptionsHtml(null) + '</select></div>' +
+      '</div>' +
+      '<div class="field"><label>Valor da venda</label><input id="fCelVendaValor" type="number" min="0" step="0.01" value="' + c.preco + '"></div>' +
+      '<div class="field" style="margin-top:0.5rem;"><label>Forma de pagamento</label></div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem;">' +
+        formas.map(function(f){ return '<button type="button" class="btn btn-ghost" data-forma-pagto="' + esc(f) + '">' + esc(f) + '</button>'; }).join("") +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button></div>'
+    ), function(body){
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelectorAll("[data-forma-pagto]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var forma = btn.dataset.formaPagto;
+          var valor = parseFloat(body.querySelector("#fCelVendaValor").value) || 0;
+          if(valor <= 0){ toast("Informe um valor válido"); return; }
+          var clienteId = body.querySelector("#fCelVendaCliente").value || null;
+          var vendedor = body.querySelector("#fCelVendaVendedor").value || null;
+          var novaVenda = {
+            id: uid(),
+            data: todayISO(),
+            criadoEm: new Date().toISOString(),
+            clienteId: clienteId,
+            vendedor: vendedor,
+            itens: [{ produtoId: null, nome: c.modelo + (c.imei ? " (IMEI " + c.imei + ")" : ""), qtd: 1, precoUnit: valor }],
+            total: valor,
+            desconto: 0,
+            pagamento: forma,
+            pagamentos: [{ forma: forma, valor: valor }],
+            origemCelularId: c.id
+          };
+          state.vendas.push(novaVenda);
+          c.status = "vendido";
+          c.vendaId = novaVenda.id;
+          c.dataVenda = novaVenda.data;
+          saveData();
+          closeModal();
+          renderAll();
+          toast("Venda registrada e lançada no caixa");
+        });
+      });
+    });
+  }
+
+  // ================= QUEBRA (GARANTIA) =================
+  function renderQuebras(){
+    var tbody = document.getElementById("tblQuebras");
+    var list = state.quebras.slice().sort(function(a,b){ return (b.data||"").localeCompare(a.data||""); });
+    if(list.length === 0){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhuma quebra registrada.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(function(q){
+      var tipoBadge = q.tipo === "troca" ? '<span class="badge badge-muted">Troca de venda</span>' : '<span class="badge badge-warn">Perda avulsa</span>';
+      var vinculo = q.tipo === "troca" ? esc(clienteNome(q.clienteId)) : "-";
+      return '<tr>' +
+        '<td>' + fmtDate(q.data) + '</td>' +
+        '<td>' + tipoBadge + '</td>' +
+        '<td class="cell-strong">' + esc(q.nome) + '</td>' +
+        '<td>' + q.qtd + '</td>' +
+        '<td>' + esc(q.motivo || "-") + '</td>' +
+        '<td>' + vinculo + '</td>' +
+        '<td class="cell-actions"><button class="btn btn-danger btn-sm" data-del-quebra="' + q.id + '">Excluir</button></td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  function quebraFormAvulsaHtml(){
+    return (
+      '<div class="field"><label>Produto / peça</label>' + comboProdutoHtml("", "", false) + '</div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>Quantidade</label><input id="fQuebraQtd" type="number" min="1" value="1"></div>' +
+        '<div class="field"><label>Data</label><input id="fQuebraData" type="date" value="' + todayISO() + '"></div>' +
+      '</div>' +
+      '<div class="field"><label>Motivo</label><input id="fQuebraMotivo" placeholder="Ex: quebrou durante o teste, defeito de fábrica..."></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">Registrar quebra</button></div>'
+    );
+  }
+
+  function abrirNovaQuebra(){
+    openModal("Nova quebra", (
+      '<p style="margin:0 0 1rem;color:var(--ink-dim);">Escolha o tipo de quebra.</p>' +
+      '<div class="modal-actions" style="justify-content:flex-start;flex-wrap:wrap;">' +
+        '<button type="button" class="btn btn-primary" id="btnQuebraAvulsa">Perda avulsa (sem venda)</button>' +
+        '<button type="button" class="btn btn-ghost" id="btnQuebraTroca">Troca de um produto já vendido</button>' +
+      '</div>'
+    ), function(body){
+      body.querySelector("#btnQuebraAvulsa").addEventListener("click", abrirQuebraAvulsa);
+      body.querySelector("#btnQuebraTroca").addEventListener("click", abrirQuebraTrocaListaVendas);
+    });
+  }
+
+  function abrirQuebraAvulsa(){
+    openModal("Perda avulsa", quebraFormAvulsaHtml(), function(body){
+      var comboWrap = body.querySelector(".combo-wrap");
+      bindComboProduto(comboWrap, function(){}, false);
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelector("#btnSave").addEventListener("click", function(){
+        var produtoId = comboWrap.querySelector(".v-produto-id").value;
+        var qtd = parseInt(body.querySelector("#fQuebraQtd").value, 10) || 0;
+        var motivo = body.querySelector("#fQuebraMotivo").value.trim();
+        var data = body.querySelector("#fQuebraData").value || todayISO();
+        if(!produtoId || qtd <= 0){ toast("Selecione o produto e a quantidade"); return; }
+        var prod = state.produtos.find(function(p){ return p.id === produtoId; });
+        if(!prod){ toast("Produto não encontrado"); return; }
+        if(qtd > prod.estoque){ toast("Estoque insuficiente para " + prod.nome); return; }
+        baixarEstoqueItens([{ produtoId: produtoId, qtd: qtd }]);
+        state.quebras.push({
+          id: uid(),
+          tipo: "avulsa",
+          data: data,
+          produtoId: produtoId,
+          nome: prod.nome,
+          qtd: qtd,
+          motivo: motivo,
+          vendaId: null,
+          clienteId: null
+        });
+        saveData();
+        closeModal();
+        renderAll();
+        toast("Quebra registrada e baixada do estoque");
+      });
+    });
+  }
+
+  function abrirQuebraTrocaListaVendas(){
+    var elegiveis = vendasAtivas().filter(function(v){ return v.itens.some(function(i){ return i.produtoId; }); })
+      .slice().sort(function(a,b){ return (b.criadoEm || b.data).localeCompare(a.criadoEm || a.data); });
+
+    var linhas = elegiveis.length === 0
+      ? '<tr class="empty-row"><td colspan="5">Nenhuma venda com produto de estoque encontrada.</td></tr>'
+      : elegiveis.map(function(v){
+          return '<tr>' +
+            '<td>' + fmtDate(v.data) + '</td>' +
+            '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + '</td>' +
+            '<td>' + esc(v.itens.map(function(i){ return i.qtd + "x " + i.nome; }).join(", ")) + '</td>' +
+            '<td class="cell-strong">' + brl(v.total) + '</td>' +
+            '<td class="cell-actions"><button class="btn btn-secondary btn-sm" data-quebra-venda="' + v.id + '">Selecionar</button></td>' +
+          '</tr>';
+        }).join("");
+
+    openModal("Escolha a venda", (
+      '<p style="margin:0 0 1rem;color:var(--ink-dim);">Escolha a venda do produto que quebrou (garantia). O produto é reposto do estoque, sem cobrar de novo do cliente.</p>' +
+      '<div class="vd-lista-wrap table-wrap">' +
+        '<table><thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Total</th><th></th></tr></thead>' +
+        '<tbody id="quebraVendaTbody">' + linhas + '</tbody></table>' +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Fechar</button></div>'
+    ), function(body){
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelector("#quebraVendaTbody").addEventListener("click", function(e){
+        var btn = e.target.closest("[data-quebra-venda]");
+        if(btn) abrirQuebraTrocaItem(btn.dataset.quebraVenda);
+      });
+    }, { large: true });
+  }
+
+  function abrirQuebraTrocaItem(vendaId){
+    var v = state.vendas.find(function(x){ return x.id === vendaId; });
+    if(!v) return;
+    var itensEstoque = v.itens.filter(function(i){ return i.produtoId; });
+    var itemOptions = itensEstoque.map(function(i, idx){
+      return '<option value="' + idx + '">' + esc(i.qtd + "x " + i.nome) + '</option>';
+    }).join("");
+
+    openModal("Registrar troca (garantia)", (
+      '<div class="fechamento-detalhes" style="margin-bottom:1rem;">' +
+        '<div class="fechamento-detalhes-row"><span>Cliente</span><span>' + esc(clienteNome(v.clienteId)) + '</span></div>' +
+        '<div class="fechamento-detalhes-row"><span>Data da venda</span><span>' + fmtDate(v.data) + '</span></div>' +
+      '</div>' +
+      '<div class="field"><label>Peça / produto que quebrou</label><select id="fQuebraItem">' + itemOptions + '</select></div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>Quantidade a repor</label><input id="fQuebraQtd" type="number" min="1" value="1"></div>' +
+        '<div class="field"><label>Data</label><input id="fQuebraData" type="date" value="' + todayISO() + '"></div>' +
+      '</div>' +
+      '<div class="field"><label>Motivo</label><input id="fQuebraMotivo" placeholder="Ex: defeito de fábrica dentro da garantia"></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">Registrar troca</button></div>'
+    ), function(body){
+      body.querySelector("#btnCancel").addEventListener("click", closeModal);
+      body.querySelector("#btnSave").addEventListener("click", function(){
+        var idx = parseInt(body.querySelector("#fQuebraItem").value, 10);
+        var item = itensEstoque[idx];
+        var qtd = parseInt(body.querySelector("#fQuebraQtd").value, 10) || 0;
+        var motivo = body.querySelector("#fQuebraMotivo").value.trim();
+        var data = body.querySelector("#fQuebraData").value || todayISO();
+        if(!item || qtd <= 0){ toast("Selecione a peça e a quantidade"); return; }
+        var prod = state.produtos.find(function(p){ return p.id === item.produtoId; });
+        if(!prod){ toast("Produto não encontrado no estoque"); return; }
+        if(qtd > prod.estoque){ toast("Estoque insuficiente para repor " + prod.nome); return; }
+        baixarEstoqueItens([{ produtoId: item.produtoId, qtd: qtd }]);
+        state.quebras.push({
+          id: uid(),
+          tipo: "troca",
+          data: data,
+          produtoId: item.produtoId,
+          nome: prod.nome,
+          qtd: qtd,
+          motivo: motivo,
+          vendaId: v.id,
+          clienteId: v.clienteId
+        });
+        saveData();
+        closeModal();
+        renderAll();
+        toast("Troca registrada — estoque atualizado");
+      });
+    });
+  }
+
+  document.getElementById("btnNovaQuebra").addEventListener("click", abrirNovaQuebra);
+  document.getElementById("tblQuebras").addEventListener("click", function(e){
+    var delId = e.target.dataset.delQuebra;
+    if(delId){
+      if(confirm("Excluir este registro de quebra? O estoque não será restaurado automaticamente.")){
+        state.quebras = state.quebras.filter(function(q){ return q.id !== delId; });
+        saveData(); renderAll(); toast("Registro de quebra excluído");
       }
     }
   });
@@ -901,14 +1355,20 @@
       var matches = state.produtos.filter(function(p){
         return !termoLower || p.nome.toLowerCase().indexOf(termoLower) !== -1;
       }).slice(0, 30);
-      dd.innerHTML = matches.length === 0
-        ? '<div class="combo-empty">' + (permitirLivre
+      // Fora do estoque, sugere pela tabela de preços de peças (só valor de referência).
+      var matchesPecas = permitirLivre ? state.pecasPreco.filter(function(pc){
+        return !termoLower || pc.nome.toLowerCase().indexOf(termoLower) !== -1;
+      }).slice(0, 15) : [];
+      var html = matches.map(function(p){
+        return '<div class="combo-item" data-produto-id="' + p.id + '">' + esc(p.nome) +
+          ' <span class="combo-item-sub">(' + p.estoque + ' em estoque · ' + brl(p.preco) + ')</span></div>';
+      }).join("") + matchesPecas.map(function(pc){
+        return '<div class="combo-item combo-item-peca" data-peca-id="' + pc.id + '">' + esc(pc.nome) +
+          ' <span class="combo-item-sub">(preço de referência · ' + brl(pc.valor) + ')</span></div>';
+      }).join("");
+      dd.innerHTML = html || ('<div class="combo-empty">' + (permitirLivre
             ? 'Sem esse item no estoque — pode escrever o nome e informar o valor à mão.'
-            : 'Nenhum produto encontrado') + '</div>'
-        : matches.map(function(p){
-            return '<div class="combo-item" data-produto-id="' + p.id + '">' + esc(p.nome) +
-              ' <span class="combo-item-sub">(' + p.estoque + ' em estoque · ' + brl(p.preco) + ')</span></div>';
-          }).join("");
+            : 'Nenhum produto encontrado') + '</div>');
       dd.classList.remove("hidden");
     }
     function fecharDropdown(){ dd.classList.add("hidden"); dd.innerHTML = ""; }
@@ -922,14 +1382,23 @@
       setTimeout(fecharDropdown, 150);
     });
     dd.addEventListener("mousedown", function(e){
-      var item = e.target.closest(".combo-item[data-produto-id]");
+      var item = e.target.closest(".combo-item");
       if(!item) return;
-      var prod = state.produtos.find(function(p){ return p.id === item.dataset.produtoId; });
-      if(!prod) return;
-      idInput.value = prod.id;
-      buscaInput.value = prod.nome;
-      fecharDropdown();
-      if(onSelect) onSelect(prod);
+      if(item.dataset.produtoId){
+        var prod = state.produtos.find(function(p){ return p.id === item.dataset.produtoId; });
+        if(!prod) return;
+        idInput.value = prod.id;
+        buscaInput.value = prod.nome;
+        fecharDropdown();
+        if(onSelect) onSelect(prod);
+      } else if(item.dataset.pecaId){
+        var peca = state.pecasPreco.find(function(pc){ return pc.id === item.dataset.pecaId; });
+        if(!peca) return;
+        idInput.value = "";
+        buscaInput.value = peca.nome;
+        fecharDropdown();
+        if(onSelect) onSelect({ id: null, nome: peca.nome, preco: peca.valor });
+      }
     });
   }
 
@@ -1342,6 +1811,11 @@
         if(v.origemAssistenciaId){
           var a = state.assistencias.find(function(x){ return x.id === v.origemAssistenciaId; });
           if(a){ a.status = "pendente"; a.vendaId = null; }
+        }
+        // Um celular devolvido volta a ficar disponível para venda.
+        if(v.origemCelularId){
+          var cel = state.celulares.find(function(x){ return x.id === v.origemCelularId; });
+          if(cel){ cel.status = "disponivel"; cel.vendaId = null; cel.dataVenda = null; }
         }
 
         saveData();
@@ -2503,28 +2977,38 @@
   bindEyeToggle("eyeDespesasTotal");
 
   // Custo da mercadoria é informação de administrador: só aparece com a senha.
+  // O mesmo cadeado vale para Produtos e para Estoque Celular.
   var custoVisivel = false;
-  document.getElementById("eyeCusto").addEventListener("click", function(e){
-    e.stopPropagation();
+  function toggleCustoVisivel(){
     if(custoVisivel){
       custoVisivel = false;
       renderProdutos(document.getElementById("buscaProdutos").value);
+      renderEstoqueCelular();
       atualizarOlhoCusto();
     } else {
       pedirSenhaAdmin(function(){
         custoVisivel = true;
         renderProdutos(document.getElementById("buscaProdutos").value);
+        renderEstoqueCelular();
         atualizarOlhoCusto();
       });
     }
+  }
+  ["eyeCusto", "eyeCustoCelular"].forEach(function(id){
+    document.getElementById(id).addEventListener("click", function(e){
+      e.stopPropagation();
+      toggleCustoVisivel();
+    });
   });
 
   function atualizarOlhoCusto(){
-    var btn = document.getElementById("eyeCusto");
-    btn.innerHTML = custoVisivel ? EYE_OPEN_SVG : EYE_OFF_SVG;
-    btn.setAttribute("aria-pressed", custoVisivel ? "true" : "false");
-    btn.setAttribute("aria-label", custoVisivel ? "Ocultar custo" : "Mostrar custo");
-    btn.title = custoVisivel ? "Ocultar custo" : "Mostrar custo (admin)";
+    ["eyeCusto", "eyeCustoCelular"].forEach(function(id){
+      var btn = document.getElementById(id);
+      btn.innerHTML = custoVisivel ? EYE_OPEN_SVG : EYE_OFF_SVG;
+      btn.setAttribute("aria-pressed", custoVisivel ? "true" : "false");
+      btn.setAttribute("aria-label", custoVisivel ? "Ocultar custo" : "Mostrar custo");
+      btn.title = custoVisivel ? "Ocultar custo" : "Mostrar custo (admin)";
+    });
   }
 
   function toggleGraficosVisiveis(){
@@ -2929,6 +3413,9 @@
     renderDashboard();
     renderClientes(document.getElementById("buscaClientes").value);
     renderProdutos(document.getElementById("buscaProdutos").value);
+    renderEstoqueCelular();
+    renderQuebras();
+    renderPecas(document.getElementById("buscaPecas").value);
     renderVendas(document.getElementById("buscaVendas").value);
     renderAssistencias();
     renderFinanceiro();
