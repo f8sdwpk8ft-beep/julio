@@ -3,7 +3,7 @@
 
   var STORAGE_KEY = "gestao-simples-data-v1";
 
-  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], assistencias: [], celulares: [], quebras: [], pecasPreco: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], categorias: ["Produtos", "Assistência Técnica"], vendedores: [], comissaoPercentual: 2, nomeLoja: "" };
+  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], assistencias: [], celulares: [], quebras: [], pecasPreco: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], categorias: ["Produtos", "Assistência Técnica"], vendedores: [], comissaoPercentual: 2, nomeLoja: "", adminCode: "1518", sellerDiscountCode: "3268" };
 
   function loadData(){
     try{
@@ -247,12 +247,14 @@
       return;
     }
     tbody.innerHTML = list.map(function(p){
+      var estoqueBaixo = p.estoqueMinimo > 0 && p.estoque <= p.estoqueMinimo;
+      var estoqueCelHtml = p.estoque + (estoqueBaixo ? ' <span class="badge badge-danger" title="Mínimo: ' + p.estoqueMinimo + '">Estoque baixo</span>' : '');
       return '<tr>' +
         '<td class="cell-strong">' + esc(p.nome) + '</td>' +
         '<td>' + esc(p.categoria || "-") + '</td>' +
         '<td>' + brl(p.preco) + '</td>' +
         '<td>' + (custoVisivel ? brl(p.custo) : '<span class="valor-oculto">R$ &bull;&bull;&bull;&bull;</span>') + '</td>' +
-        '<td>' + p.estoque + '</td>' +
+        '<td>' + estoqueCelHtml + '</td>' +
         '<td class="cell-actions">' +
           '<button class="btn btn-ghost btn-sm" data-edit-produto="' + p.id + '">Editar</button>' +
           '<button class="btn btn-danger btn-sm" data-del-produto="' + p.id + '">Excluir</button>' +
@@ -280,7 +282,10 @@
         '<div class="field"><label>Preço de venda</label><input id="fPreco" type="number" min="0" step="0.01" value="' + (p.preco != null ? p.preco : "") + '"></div>' +
         '<div class="field"><label>Custo</label><div style="display:flex;gap:0.4rem;align-items:center;">' + custoCampoHtml + '</div></div>' +
       '</div>' +
-      '<div class="field"><label>Estoque atual</label><input id="fEstoque" type="number" min="0" value="' + (p.estoque != null ? p.estoque : 0) + '"></div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>Estoque atual</label><input id="fEstoque" type="number" min="0" value="' + (p.estoque != null ? p.estoque : 0) + '"></div>' +
+        '<div class="field"><label>Estoque mínimo (alerta)</label><input id="fEstoqueMinimo" type="number" min="0" value="' + (p.estoqueMinimo != null ? p.estoqueMinimo : 0) + '"></div>' +
+      '</div>' +
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnSave">Salvar</button></div>'
     );
   }
@@ -321,7 +326,8 @@
           categoria: body.querySelector("#fCategoria").value.trim(),
           preco: parseFloat(body.querySelector("#fPreco").value) || 0,
           custo: custoInput.disabled ? (p ? p.custo : 0) : (parseFloat(custoInput.value) || 0),
-          estoque: parseInt(body.querySelector("#fEstoque").value, 10) || 0
+          estoque: parseInt(body.querySelector("#fEstoque").value, 10) || 0,
+          estoqueMinimo: parseInt(body.querySelector("#fEstoqueMinimo").value, 10) || 0
         };
         if(p){
           Object.assign(p, data);
@@ -616,7 +622,7 @@
             criadoEm: new Date().toISOString(),
             clienteId: clienteId,
             vendedor: vendedor,
-            itens: [{ produtoId: null, nome: c.modelo + (c.imei ? " (IMEI " + c.imei + ")" : ""), qtd: 1, precoUnit: valor }],
+            itens: [{ produtoId: null, nome: c.modelo + (c.imei ? " (IMEI " + c.imei + ")" : ""), qtd: 1, precoUnit: valor, custoUnit: c.custo || 0 }],
             total: valor,
             desconto: 0,
             pagamento: forma,
@@ -706,6 +712,7 @@
           produtoId: produtoId,
           nome: prod.nome,
           qtd: qtd,
+          custoUnit: prod.custo || 0,
           motivo: motivo,
           vendaId: null,
           clienteId: null
@@ -790,6 +797,7 @@
           produtoId: item.produtoId,
           nome: prod.nome,
           qtd: qtd,
+          custoUnit: prod.custo || 0,
           motivo: motivo,
           vendaId: v.id,
           clienteId: v.clienteId
@@ -936,6 +944,30 @@
   // (caixa, fechamentos, comissões e gráficos).
   function vendasAtivas(){
     return state.vendas.filter(function(v){ return !v.devolvida; });
+  }
+
+  // Custo de um item de venda: usa o valor gravado no momento da venda
+  // (custoUnit) e, para vendas antigas que não tinham esse campo, cai para
+  // o custo atual do produto vinculado (aproximação razoável).
+  function itemCusto(i){
+    if(i.custoUnit != null) return i.custoUnit;
+    if(i.produtoId){
+      var p = state.produtos.find(function(p){ return p.id === i.produtoId; });
+      if(p) return p.custo || 0;
+    }
+    return 0;
+  }
+
+  function vendaCusto(v){
+    return v.itens.reduce(function(s,i){ return s + i.qtd * itemCusto(i); }, 0);
+  }
+
+  // Perda financeira de uma quebra (perda avulsa ou reposição de garantia):
+  // estoque saiu sem virar venda, então o custo é prejuízo direto.
+  function quebraCusto(q){
+    if(q.custoUnit != null) return q.qtd * q.custoUnit;
+    var p = state.produtos.find(function(p){ return p.id === q.produtoId; });
+    return q.qtd * (p ? (p.custo || 0) : 0);
   }
 
   function resumoPorPagamento(lista){
@@ -1557,7 +1589,7 @@
         bindComboProduto(row, function(prod){
           row.querySelector(".v-preco").value = prod.preco;
           recalcTotal();
-        });
+        }, true);
         row.querySelector(".v-qtd").addEventListener("input", recalcTotal);
         row.querySelector(".v-preco").addEventListener("input", recalcTotal);
         row.querySelector(".v-remove").addEventListener("click", function(){
@@ -1592,7 +1624,7 @@
       body.querySelector("#btnLiberarDesconto").addEventListener("click", function(){
         var senha = prompt("Senha do vendedor para liberar o desconto:");
         if(senha === null) return;
-        if(senha === SELLER_DISCOUNT_CODE){
+        if(senha === state.sellerDiscountCode){
           var input = body.querySelector("#fDesconto");
           input.disabled = false;
           input.focus();
@@ -1647,10 +1679,10 @@
             var prod = state.produtos.find(function(p){ return p.id === produtoId; });
             if(!prod){ valid = false; return; }
             if(qtd > prod.estoque){ valid = false; toast("Estoque insuficiente para " + prod.nome); return; }
-            itens.push({ produtoId: produtoId, nome: prod.nome, qtd: qtd, precoUnit: preco });
+            itens.push({ produtoId: produtoId, nome: prod.nome, qtd: qtd, precoUnit: preco, custoUnit: prod.custo || 0 });
           } else if(nomeLivre && preco > 0){
-            // item sem vínculo de estoque (peça avulsa, celular, mão de obra...): mantém como está
-            itens.push({ produtoId: null, nome: nomeLivre, qtd: qtd, precoUnit: preco });
+            // item sem vínculo de estoque (peça avulsa, celular, mão de obra...): sem custo conhecido
+            itens.push({ produtoId: null, nome: nomeLivre, qtd: qtd, precoUnit: preco, custoUnit: 0 });
           } else {
             valid = false;
           }
@@ -2018,8 +2050,19 @@
     }
     if(delId){
       if(confirm("Excluir esta venda? O estoque não será restaurado automaticamente.")){
+        var vendaExcluida = state.vendas.find(function(v){ return v.id === delId; });
         state.vendas = state.vendas.filter(function(v){ return v.id !== delId; });
         state.contas = state.contas.filter(function(c){ return c.vendaId !== delId; });
+        // Sem isso, o aparelho/assistência ficaria travado apontando pra uma
+        // venda que não existe mais, sem nenhuma forma de voltar a vender/atender.
+        if(vendaExcluida && vendaExcluida.origemCelularId){
+          var cel = state.celulares.find(function(x){ return x.id === vendaExcluida.origemCelularId; });
+          if(cel){ cel.status = "disponivel"; cel.vendaId = null; cel.dataVenda = null; }
+        }
+        if(vendaExcluida && vendaExcluida.origemAssistenciaId){
+          var assist = state.assistencias.find(function(x){ return x.id === vendaExcluida.origemAssistenciaId; });
+          if(assist){ assist.status = "pendente"; assist.vendaId = null; }
+        }
         saveData(); renderAll(); toast("Venda excluída");
       }
     }
@@ -2167,7 +2210,7 @@
       body.querySelector("#btnLiberarDescontoAssist").addEventListener("click", function(){
         var senha = prompt("Senha do vendedor para liberar o desconto:");
         if(senha === null) return;
-        if(senha === SELLER_DISCOUNT_CODE){
+        if(senha === state.sellerDiscountCode){
           var input = body.querySelector("#fAssistDesconto");
           input.disabled = false;
           input.focus();
@@ -2224,10 +2267,10 @@
           if(produtoId){
             var prod = state.produtos.find(function(p){ return p.id === produtoId; });
             if(!prod) return;
-            itensNovos.push({ produtoId: produtoId, nome: prod.nome, qtd: qtd, precoUnit: preco });
+            itensNovos.push({ produtoId: produtoId, nome: prod.nome, qtd: qtd, precoUnit: preco, custoUnit: prod.custo || 0 });
           } else if(nomeLivre && preco > 0){
-            // peça que não existe no estoque: entra só no valor, sem baixa
-            itensNovos.push({ produtoId: null, nome: nomeLivre, qtd: qtd, precoUnit: preco });
+            // peça que não existe no estoque: entra só no valor, sem baixa, sem custo conhecido
+            itensNovos.push({ produtoId: null, nome: nomeLivre, qtd: qtd, precoUnit: preco, custoUnit: 0 });
           }
         });
 
@@ -2325,7 +2368,7 @@
       body.querySelector("#btnLiberarDescontoRetirada").addEventListener("click", function(){
         var senha = prompt("Senha do vendedor para liberar o desconto:");
         if(senha === null) return;
-        if(senha === SELLER_DISCOUNT_CODE){
+        if(senha === state.sellerDiscountCode){
           var input = body.querySelector("#fAssistDescontoFinal");
           input.disabled = false;
           input.focus();
@@ -2345,10 +2388,10 @@
           if(totalFinal <= 0){ toast("Informe um valor válido"); return; }
 
           var itensVenda = (a.itens || []).map(function(i){
-            return { produtoId: i.produtoId, nome: i.nome, qtd: i.qtd, precoUnit: i.precoUnit };
+            return { produtoId: i.produtoId, nome: i.nome, qtd: i.qtd, precoUnit: i.precoUnit, custoUnit: i.custoUnit || 0 };
           });
           if(a.maoDeObra > 0){
-            itensVenda.push({ produtoId: null, nome: "Mão de obra: " + assistenciaDescricao(a), qtd: 1, precoUnit: a.maoDeObra });
+            itensVenda.push({ produtoId: null, nome: "Mão de obra: " + assistenciaDescricao(a), qtd: 1, precoUnit: a.maoDeObra, custoUnit: 0 });
           }
 
           var novaVenda = {
@@ -2538,12 +2581,14 @@
 
     var vendasHoje = vendasAtivas().filter(function(v){ return v.data === hoje; });
     var despesasHoje = state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento === hoje; });
+    var quebrasHoje = filtrarQuebrasPorPeriodo("hoje");
 
     var pagamentosHoje = somarPorForma(vendasHoje);
     var totalVendasHoje = vendasHoje.reduce(function(s,v){ return s + v.total; }, 0);
     var totalDespesasHoje = despesasHoje.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0);
     var despesasHojeDinheiro = despesasHoje.filter(function(c){ return c.formaPagamento === "Dinheiro"; }).reduce(function(s,c){ return s + Number(c.valor || 0); }, 0);
     var caixaEsperadoDinheiro = (pagamentosHoje["Dinheiro"] || 0) - despesasHojeDinheiro;
+    var totalQuebrasHoje = quebrasHoje.reduce(function(s,q){ return s + quebraCusto(q); }, 0);
 
     var fechamentoDiaHtml =
       '<div class="fechamento-grid">' +
@@ -2559,6 +2604,9 @@
       '<div class="fechamento-detalhes">' +
         fechamentoDetalhesHtml(pagamentosHoje,
           '<div style="margin-top:0.8rem;padding-top:0.8rem;border-top:2px solid var(--line);">' +
+            (totalQuebrasHoje > 0
+              ? '<div class="fechamento-detalhes-row"><span>Perdas em quebras hoje (não é caixa)</span><span style="color:var(--danger);">- ' + brl(totalQuebrasHoje) + '</span></div>'
+              : "") +
             '<div class="fechamento-detalhes-row" style="font-weight:700;color:var(--ok);">' +
               '<span>Caixa Esperado em Dinheiro</span><span>' + brl(caixaEsperadoDinheiro) + '</span>' +
             '</div>' +
@@ -2581,11 +2629,16 @@
 
     var vendasMes = vendasAtivas().filter(function(v){ return v.data.slice(0,7) === ym; });
     var despesasMes = state.contas.filter(function(c){ return c.tipo === "pagar" && c.vencimento.slice(0,7) === ym; });
+    var quebrasMes = filtrarQuebrasPorPeriodo("mes");
 
     var pagamentosMes = somarPorForma(vendasMes);
     var totalVendasMes = vendasMes.reduce(function(s,v){ return s + v.total; }, 0);
+    var totalCustoMes = vendasMes.reduce(function(s,v){ return s + vendaCusto(v); }, 0);
     var totalDespesasMes = despesasMes.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0);
-    var lucroMes = totalVendasMes - totalDespesasMes;
+    var pctMes = Number(state.comissaoPercentual) || 0;
+    var totalComissoesMes = vendasMes.reduce(function(s,v){ return s + (v.vendedor ? v.total * (pctMes / 100) : 0); }, 0);
+    var totalQuebrasMes = quebrasMes.reduce(function(s,q){ return s + quebraCusto(q); }, 0);
+    var lucroMes = totalVendasMes - totalCustoMes - totalDespesasMes - totalComissoesMes - totalQuebrasMes;
 
     var fechamentoMesHtml =
       '<div class="fechamento-grid">' +
@@ -2602,7 +2655,10 @@
         '<div class="fechamento-label" style="margin-bottom:0.6rem;">Vendas por forma de pagamento</div>' +
         fechamentoDetalhesHtml(pagamentosMes,
           '<div style="margin-top:0.8rem;padding-top:0.8rem;border-top:2px solid var(--line);">' +
-            '<div class="fechamento-detalhes-row" style="font-weight:700;color:var(--ok);">' +
+            '<div class="fechamento-detalhes-row"><span>Custo das mercadorias vendidas (CMV)</span><span>- ' + brl(totalCustoMes) + '</span></div>' +
+            '<div class="fechamento-detalhes-row"><span>Comissões (' + pctMes + '%)</span><span>- ' + brl(totalComissoesMes) + '</span></div>' +
+            (totalQuebrasMes > 0 ? '<div class="fechamento-detalhes-row"><span>Perdas em quebras (garantia)</span><span>- ' + brl(totalQuebrasMes) + '</span></div>' : "") +
+            '<div class="fechamento-detalhes-row" style="font-weight:700;color:' + (lucroMes >= 0 ? "var(--ok)" : "var(--danger)") + ';">' +
               '<span>Lucro do Mês</span><span>' + brl(lucroMes) + '</span>' +
             '</div>' +
           '</div>'
@@ -2972,8 +3028,6 @@
   // a senha de admin para revelar.
   var kpiVisiveis = false;
   var graficosVisiveis = false;
-  var ADMIN_CODE = "1518";
-  var SELLER_DISCOUNT_CODE = "3268";
   var EYE_OPEN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
   var EYE_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c7 0 10.5 7 10.5 7a13.2 13.2 0 0 1-3.1 4.1M6.5 6.6C3.4 8.5 1.5 12 1.5 12S5 19 12 19a10.6 10.6 0 0 0 4.2-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
   var LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
@@ -2988,7 +3042,7 @@
       input.focus();
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
       function tentar(){
-        if(input.value === ADMIN_CODE){
+        if(input.value === state.adminCode){
           closeModal();
           onSuccess();
         } else {
@@ -3271,12 +3325,15 @@
     var vencidas = state.contas.filter(function(c){
       return c.tipo === "pagar" && c.status === "pendente" && c.vencimento < hoje;
     });
+    var estoqueBaixo = state.produtos.filter(function(p){
+      return p.estoqueMinimo > 0 && p.estoque <= p.estoqueMinimo;
+    });
     var container = document.getElementById("alertasContainer");
-    if(vencidas.length === 0){
+    if(vencidas.length === 0 && estoqueBaixo.length === 0){
       container.innerHTML = "";
       return;
     }
-    container.innerHTML = vencidas.map(function(c){
+    var htmlContas = vencidas.map(function(c){
       return '<div class="alerta-item" data-conta-id="' + esc(c.id) + '" title="Clique para ver detalhes">' +
         '<div class="alerta-conteudo">' +
           '<div class="alerta-descricao">' + esc(c.descricao) + '</div>' +
@@ -3285,14 +3342,30 @@
         '<div class="alerta-valor">' + brl(c.valor) + '</div>' +
       '</div>';
     }).join("");
-    container.addEventListener("click", function(e){
-      var alerta = e.target.closest(".alerta-item");
-      if(alerta){
-        var contaId = alerta.dataset.contaId;
-        abrirDetalhesDespesas("data", contaId);
-      }
-    });
+    var htmlEstoque = estoqueBaixo.map(function(p){
+      return '<div class="alerta-item" data-produto-id="' + esc(p.id) + '" title="Clique para ver o produto">' +
+        '<div class="alerta-conteudo">' +
+          '<div class="alerta-descricao">Estoque baixo: ' + esc(p.nome) + '</div>' +
+          '<div class="alerta-detalhes">Restam ' + p.estoque + ' (mínimo ' + p.estoqueMinimo + ')</div>' +
+        '</div>' +
+        '<div class="alerta-valor" style="color:var(--danger);">' + p.estoque + '</div>' +
+      '</div>';
+    }).join("");
+    container.innerHTML = htmlContas + htmlEstoque;
   }
+
+  // O clique nos alertas é ligado uma única vez (fora de renderAlertas) para
+  // não empilhar um listener novo a cada renderização.
+  document.getElementById("alertasContainer").addEventListener("click", function(e){
+    var alerta = e.target.closest(".alerta-item");
+    if(!alerta) return;
+    if(alerta.dataset.contaId){
+      abrirDetalhesDespesas();
+    } else if(alerta.dataset.produtoId){
+      showView("produtos");
+      openProdutoModal(alerta.dataset.produtoId);
+    }
+  });
 
   // ================= ADMIN =================
   function vendedorForm(nomeAtual){
@@ -3368,7 +3441,32 @@
     saveData();
   });
 
+  document.getElementById("fSenhaAdminConfig").addEventListener("change", function(e){
+    var val = e.target.value.trim();
+    if(!val){ e.target.value = state.adminCode; toast("A senha não pode ficar vazia"); return; }
+    state.adminCode = val;
+    saveData();
+    toast("Senha de administrador atualizada");
+  });
+
+  document.getElementById("fSenhaDescontoConfig").addEventListener("change", function(e){
+    var val = e.target.value.trim();
+    if(!val){ e.target.value = state.sellerDiscountCode; toast("A senha não pode ficar vazia"); return; }
+    state.sellerDiscountCode = val;
+    saveData();
+    toast("Senha de desconto atualizada");
+  });
+
   var fechamentoGeralFiltro = { tipo: "mes", inicio: null, fim: null };
+
+  function filtrarQuebrasPorPeriodo(filtro, rangeInicio, rangeFim){
+    var hoje = todayISO();
+    if(filtro === "hoje" || filtro === "data") return state.quebras.filter(function(q){ return q.data === hoje; });
+    if(filtro === "mes") return state.quebras.filter(function(q){ return q.data.slice(0,7) === hoje.slice(0,7); });
+    if(filtro === "ano") return state.quebras.filter(function(q){ return q.data.slice(0,4) === hoje.slice(0,4); });
+    if(filtro === "custom") return state.quebras.filter(function(q){ return q.data >= rangeInicio && q.data <= rangeFim; });
+    return state.quebras.slice();
+  }
 
   function renderFechamentoGeral(){
     var f = fechamentoGeralFiltro;
@@ -3378,14 +3476,20 @@
     var despesasPeriodo = f.tipo === "custom"
       ? filtrarDespesasPorPeriodo("custom", f.inicio, f.fim)
       : filtrarDespesasPorPeriodo(f.tipo);
+    var quebrasPeriodo = f.tipo === "custom"
+      ? filtrarQuebrasPorPeriodo("custom", f.inicio, f.fim)
+      : filtrarQuebrasPorPeriodo(f.tipo);
 
     var pagamentos = somarPorForma(vendasPeriodo);
     var totalVendas = vendasPeriodo.reduce(function(s,v){ return s + v.total; }, 0);
+    var totalCusto = vendasPeriodo.reduce(function(s,v){ return s + vendaCusto(v); }, 0);
     var totalDespesas = despesasPeriodo.reduce(function(s,c){ return s + Number(c.valor || 0); }, 0);
     var totalDesconto = vendasPeriodo.reduce(function(s,v){ return s + (v.desconto || 0); }, 0);
+    var totalQuebras = quebrasPeriodo.reduce(function(s,q){ return s + quebraCusto(q); }, 0);
     var pct = Number(state.comissaoPercentual) || 0;
     var totalComissoes = vendasPeriodo.reduce(function(s,v){ return s + (v.vendedor ? v.total * (pct / 100) : 0); }, 0);
-    var lucroLiquido = totalVendas - totalDespesas - totalComissoes;
+    var margemBruta = totalVendas - totalCusto;
+    var lucroLiquido = margemBruta - totalDespesas - totalComissoes - totalQuebras;
 
     document.getElementById("fechamentoGeralConteudo").innerHTML =
       '<div class="fechamento-grid">' +
@@ -3403,7 +3507,10 @@
         fechamentoDetalhesHtml(pagamentos,
           '<div style="margin-top:0.8rem;padding-top:0.8rem;border-top:2px solid var(--line);">' +
             '<div class="fechamento-detalhes-row"><span>Descontos concedidos</span><span>- ' + brl(totalDesconto) + '</span></div>' +
+            '<div class="fechamento-detalhes-row"><span>Custo das mercadorias vendidas (CMV)</span><span>- ' + brl(totalCusto) + '</span></div>' +
+            '<div class="fechamento-detalhes-row"><span>Margem bruta</span><span>' + brl(margemBruta) + '</span></div>' +
             '<div class="fechamento-detalhes-row"><span>Comissões (' + pct + '%)</span><span>- ' + brl(totalComissoes) + '</span></div>' +
+            (totalQuebras > 0 ? '<div class="fechamento-detalhes-row"><span>Perdas em quebras (garantia)</span><span>- ' + brl(totalQuebras) + '</span></div>' : "") +
             '<div class="fechamento-detalhes-row" style="font-weight:700;color:' + (lucroLiquido >= 0 ? "var(--ok)" : "var(--danger)") + ';">' +
               '<span>Lucro líquido</span><span>' + brl(lucroLiquido) + '</span>' +
             '</div>' +
@@ -3444,6 +3551,8 @@
 
   function renderAdmin(){
     document.getElementById("fNomeLoja").value = state.nomeLoja || "";
+    document.getElementById("fSenhaAdminConfig").value = state.adminCode || "";
+    document.getElementById("fSenhaDescontoConfig").value = state.sellerDiscountCode || "";
     renderVendedores();
     renderFechamentoGeral();
   }
