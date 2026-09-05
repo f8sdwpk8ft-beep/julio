@@ -857,6 +857,8 @@
     return state.movimentosEstoque.slice();
   }
 
+  var movimentacaoPagina = 1;
+
   function renderMovimentacao(){
     var busca = (document.getElementById("buscaMovimentacao").value || "").trim().toLowerCase();
     var list = filtrarMovimentosPorPeriodo(movimentacaoFiltro)
@@ -864,20 +866,26 @@
       .slice().sort(function(a,b){ return (b.criadoEm || b.data).localeCompare(a.criadoEm || a.data); });
 
     var tbody = document.getElementById("tblMovimentacao");
-    tbody.innerHTML = list.length === 0
-      ? '<tr class="empty-row"><td colspan="5">Nenhuma movimentação encontrada.</td></tr>'
-      : list.map(function(m){
-          var sinal = m.delta > 0 ? "+" : "";
-          var cor = m.delta > 0 ? "var(--ok)" : "var(--danger)";
-          var origemLabel = ORIGEM_MOVIMENTO_LABELS[m.origemTipo] || m.origemTipo;
-          return '<tr>' +
-            '<td>' + fmtDate(m.data) + '</td>' +
-            '<td class="cell-strong">' + esc(m.produtoNome) + '</td>' +
-            '<td style="font-weight:700;color:' + cor + ';">' + sinal + m.delta + '</td>' +
-            '<td>' + esc(origemLabel) + (m.motivo ? ' <span class="cell-sub">— ' + esc(m.motivo) + '</span>' : '') + '</td>' +
-            '<td>' + (m.estoqueResultante != null ? m.estoqueResultante : "-") + '</td>' +
-          '</tr>';
-        }).join("");
+    if(list.length === 0){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Nenhuma movimentação encontrada.</td></tr>';
+      document.getElementById("movimentacaoPaginacao").innerHTML = "";
+    } else {
+      var pag = paginar(list, movimentacaoPagina);
+      movimentacaoPagina = pag.pagina;
+      tbody.innerHTML = pag.itens.map(function(m){
+        var sinal = m.delta > 0 ? "+" : "";
+        var cor = m.delta > 0 ? "var(--ok)" : "var(--danger)";
+        var origemLabel = ORIGEM_MOVIMENTO_LABELS[m.origemTipo] || m.origemTipo;
+        return '<tr>' +
+          '<td>' + fmtDate(m.data) + '</td>' +
+          '<td class="cell-strong">' + esc(m.produtoNome) + '</td>' +
+          '<td style="font-weight:700;color:' + cor + ';">' + sinal + m.delta + '</td>' +
+          '<td>' + esc(origemLabel) + (m.motivo ? ' <span class="cell-sub">— ' + esc(m.motivo) + '</span>' : '') + '</td>' +
+          '<td>' + (m.estoqueResultante != null ? m.estoqueResultante : "-") + '</td>' +
+        '</tr>';
+      }).join("");
+      document.getElementById("movimentacaoPaginacao").innerHTML = paginacaoHtml(pag);
+    }
 
     var valorProdutos = state.produtos.reduce(function(s,p){ return s + (p.estoque||0) * (p.custo||0); }, 0);
     var celularesDisponiveis = state.celulares.filter(function(c){ return c.status === "disponivel"; });
@@ -896,13 +904,23 @@
     var btn = e.target.closest("[data-mv-filtro]");
     if(!btn) return;
     movimentacaoFiltro = btn.dataset.mvFiltro;
+    movimentacaoPagina = 1;
     document.querySelectorAll("#movimentacaoFiltros [data-mv-filtro]").forEach(function(b){
       b.classList.toggle("btn-primary", b === btn);
       b.classList.toggle("btn-ghost", b !== btn);
     });
     renderMovimentacao();
   });
-  document.getElementById("buscaMovimentacao").addEventListener("input", renderMovimentacao);
+  document.getElementById("buscaMovimentacao").addEventListener("input", function(){
+    movimentacaoPagina = 1;
+    renderMovimentacao();
+  });
+  document.getElementById("movimentacaoPaginacao").addEventListener("click", function(e){
+    var btn = e.target.closest("[data-pg-num]");
+    if(!btn || btn.disabled) return;
+    movimentacaoPagina = parseInt(btn.dataset.pgNum, 10) || 1;
+    renderMovimentacao();
+  });
 
   function quebraFormAvulsaHtml(){
     return (
@@ -1072,6 +1090,8 @@
   var vendasRangeInicio = null;
   var vendasRangeFim = null;
 
+  var vendasPagina = 1;
+
   function renderVendas(filter){
     var tbody = document.getElementById("tblVendas");
     var filterLower = (filter || "").toLowerCase();
@@ -1085,9 +1105,12 @@
     });
     if(list.length === 0){
       tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhuma venda encontrada.</td></tr>';
+      document.getElementById("vendasPaginacao").innerHTML = "";
       return;
     }
-    tbody.innerHTML = list.map(function(v){
+    var pag = paginar(list, vendasPagina);
+    vendasPagina = pag.pagina;
+    tbody.innerHTML = pag.itens.map(function(v){
       var itensResumo = v.itens.map(function(i){ return i.qtd + "x " + i.nome; }).join(", ");
       return '<tr' + (v.devolvida ? ' class="linha-devolvida"' : '') + '>' +
         '<td>' + fmtDate(v.data) + '</td>' +
@@ -1102,7 +1125,15 @@
         '</td>' +
       '</tr>';
     }).join("");
+    document.getElementById("vendasPaginacao").innerHTML = paginacaoHtml(pag);
   }
+
+  document.getElementById("vendasPaginacao").addEventListener("click", function(e){
+    var btn = e.target.closest("[data-pg-num]");
+    if(!btn || btn.disabled) return;
+    vendasPagina = parseInt(btn.dataset.pgNum, 10) || 1;
+    renderVendas(document.getElementById("buscaVendas").value);
+  });
 
   function clienteNome(id){
     if(!id) return "Consumidor";
@@ -1139,6 +1170,52 @@
       if(clienteNome(v.clienteId).toLowerCase().indexOf(buscaLower) !== -1) return true;
       return v.itens.some(function(i){ return i.nome.toLowerCase().indexOf(buscaLower) !== -1; });
     });
+  }
+
+  // ---------- Paginação genérica (usada em listas que podem crescer muito) ----------
+  var PAGINA_TAMANHO = 20;
+
+  function paginar(lista, pagina){
+    var totalPaginas = Math.max(1, Math.ceil(lista.length / PAGINA_TAMANHO));
+    pagina = Math.min(Math.max(1, pagina || 1), totalPaginas);
+    var inicio = (pagina - 1) * PAGINA_TAMANHO;
+    return { pagina: pagina, totalPaginas: totalPaginas, total: lista.length, itens: lista.slice(inicio, inicio + PAGINA_TAMANHO) };
+  }
+
+  function paginacaoHtml(pag){
+    if(pag.total === 0) return "";
+    var inicio = (pag.pagina - 1) * PAGINA_TAMANHO + 1;
+    var fim = Math.min(pag.pagina * PAGINA_TAMANHO, pag.total);
+    var info = '<div class="paginacao-info">Mostrando ' + inicio + '–' + fim + ' de ' + pag.total + '</div>';
+    if(pag.totalPaginas <= 1) return '<div class="paginacao">' + info + '</div>';
+
+    var numeros = "";
+    var mostrouReticenciaEsquerda = false;
+    var mostrouReticenciaDireita = false;
+    for(var i = 1; i <= pag.totalPaginas; i++){
+      var mostrar = i === 1 || i === pag.totalPaginas || Math.abs(i - pag.pagina) <= 2;
+      if(!mostrar){
+        if(i < pag.pagina && !mostrouReticenciaEsquerda){
+          numeros += '<span class="paginacao-reticencia">…</span>';
+          mostrouReticenciaEsquerda = true;
+        } else if(i > pag.pagina && !mostrouReticenciaDireita){
+          numeros += '<span class="paginacao-reticencia">…</span>';
+          mostrouReticenciaDireita = true;
+        }
+        continue;
+      }
+      numeros += '<button type="button" class="btn btn-sm ' + (i === pag.pagina ? "btn-primary" : "btn-ghost") + '" data-pg-num="' + i + '">' + i + '</button>';
+    }
+    return (
+      '<div class="paginacao">' +
+        info +
+        '<div class="paginacao-botoes">' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-pg-num="' + (pag.pagina - 1) + '"' + (pag.pagina <= 1 ? " disabled" : "") + '>&lsaquo; Anterior</button>' +
+          numeros +
+          '<button type="button" class="btn btn-ghost btn-sm" data-pg-num="' + (pag.pagina + 1) + '"' + (pag.pagina >= pag.totalPaginas ? " disabled" : "") + '>Próxima &rsaquo;</button>' +
+        '</div>' +
+      '</div>'
+    );
   }
 
   function filtrarDespesasPorPeriodo(filtro, rangeInicio, rangeFim){
@@ -2057,7 +2134,7 @@
   }
 
   document.getElementById("btnNovaVenda").addEventListener("click", function(){ openVendaModal(); });
-  document.getElementById("buscaVendas").addEventListener("input", function(e){ renderVendas(e.target.value); });
+  document.getElementById("buscaVendas").addEventListener("input", function(e){ vendasPagina = 1; renderVendas(e.target.value); });
 
   // ---------- Devoluções ----------
   function abrirDevolucoes(){
@@ -2289,10 +2366,12 @@
   criarSeletorPeriodo("btnPeriodoVendas", "periodoPopover", "btnPeriodoVendasLabel", function(inicio, fim){
     vendasRangeInicio = inicio;
     vendasRangeFim = fim;
+    vendasPagina = 1;
     renderVendas(document.getElementById("buscaVendas").value);
   }, function(){
     vendasRangeInicio = null;
     vendasRangeFim = null;
+    vendasPagina = 1;
     renderVendas(document.getElementById("buscaVendas").value);
   });
 
