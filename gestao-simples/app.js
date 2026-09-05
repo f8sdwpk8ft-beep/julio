@@ -3,7 +3,7 @@
 
   var STORAGE_KEY = "gestao-simples-data-v1";
 
-  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], assistencias: [], celulares: [], quebras: [], pecasPreco: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], categorias: ["Produtos", "Assistência Técnica"], vendedores: [], comissaoPercentual: 2, nomeLoja: "", adminCode: "1518", sellerDiscountCode: "3268" };
+  var DEFAULT_DATA = { clientes: [], produtos: [], vendas: [], contas: [], assistencias: [], celulares: [], quebras: [], pecasPreco: [], movimentosEstoque: [], naturezas: ["Aluguel", "Fornecedores", "Salários", "Outros"], categorias: ["Produtos", "Assistência Técnica"], vendedores: [], comissaoPercentual: 2, nomeLoja: "", adminCode: "1518", sellerDiscountCode: "3268" };
 
   function loadData(){
     try{
@@ -172,8 +172,8 @@
   });
 
   // ---------- Navigation ----------
-  var views = ["dashboard","vendas","assistencia","produtos","estoquecelular","quebra","pecas","clientes","financeiro","admin"];
-  var titles = { dashboard:"Início", vendas:"Vendas", assistencia:"Assistência Técnica", produtos:"Produtos", estoquecelular:"Estoque Celular", quebra:"Quebra (Garantia)", pecas:"Peças", clientes:"Clientes", financeiro:"Financeiro", admin:"Admin" };
+  var views = ["dashboard","vendas","assistencia","produtos","estoquecelular","quebra","movimentacao","pecas","clientes","financeiro","admin"];
+  var titles = { dashboard:"Início", vendas:"Vendas", assistencia:"Assistência Técnica", produtos:"Produtos", estoquecelular:"Estoque Celular", quebra:"Quebra (Garantia)", movimentacao:"Movimentação de Estoque", pecas:"Peças", clientes:"Clientes", financeiro:"Financeiro", admin:"Admin" };
   var adminDesbloqueado = false;
 
   function mostrarView(name){
@@ -412,7 +412,13 @@
           estoqueMinimo: parseInt(body.querySelector("#fEstoqueMinimo").value, 10) || 0
         };
         if(p){
+          // Editar o estoque à mão (correção de contagem, etc.) também entra
+          // no extrato, senão o número muda sem deixar rastro nenhum.
+          var deltaManual = data.estoque - p.estoque;
           Object.assign(p, data);
+          if(deltaManual !== 0){
+            registrarMovimentoEstoque(p.id, deltaManual, { tipo: "ajuste", id: p.id, motivo: "Ajuste manual no cadastro do produto" });
+          }
         } else {
           data.id = uid();
           state.produtos.push(data);
@@ -775,7 +781,7 @@
             pagamentos: [{ forma: forma, valor: total }],
             origemCelularId: c.id
           };
-          baixarEstoqueItens(itensExtras);
+          baixarEstoqueItens(itensExtras, { tipo: "venda", id: novaVenda.id, motivo: "Venda de aparelho — " + c.modelo });
           state.vendas.push(novaVenda);
           c.status = "vendido";
           c.vendaId = novaVenda.id;
@@ -790,11 +796,18 @@
   }
 
   // ================= QUEBRA (GARANTIA) =================
+  var quebraFiltro = "mes";
+
   function renderQuebras(){
     var tbody = document.getElementById("tblQuebras");
-    var list = state.quebras.slice().sort(function(a,b){ return (b.data||"").localeCompare(a.data||""); });
+    var list = filtrarQuebrasPorPeriodo(quebraFiltro).slice().sort(function(a,b){ return (b.data||"").localeCompare(a.data||""); });
+
+    var totalPerda = list.reduce(function(s,q){ return s + quebraCusto(q); }, 0);
+    document.getElementById("quebraResumo").innerHTML =
+      '<div class="fechamento-detalhes-row" style="font-weight:700;color:var(--danger);"><span>Perda no período (custo)</span><span>' + brl(totalPerda) + '</span></div>';
+
     if(list.length === 0){
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhuma quebra registrada.</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Nenhuma quebra neste período.</td></tr>';
       return;
     }
     tbody.innerHTML = list.map(function(q){
@@ -811,6 +824,85 @@
       '</tr>';
     }).join("");
   }
+
+  document.getElementById("quebraFiltros").addEventListener("click", function(e){
+    var btn = e.target.closest("[data-qb-filtro]");
+    if(!btn) return;
+    quebraFiltro = btn.dataset.qbFiltro;
+    document.querySelectorAll("#quebraFiltros [data-qb-filtro]").forEach(function(b){
+      b.classList.toggle("btn-primary", b === btn);
+      b.classList.toggle("btn-ghost", b !== btn);
+    });
+    renderQuebras();
+  });
+
+  // ================= MOVIMENTAÇÃO DE ESTOQUE =================
+  var ORIGEM_MOVIMENTO_LABELS = {
+    venda: "Venda",
+    devolucao: "Devolução",
+    assistencia: "Assistência",
+    quebra: "Quebra (perda)",
+    troca: "Troca (garantia)",
+    devedor: "Fiado",
+    ajuste: "Ajuste manual"
+  };
+
+  var movimentacaoFiltro = "mes";
+
+  function filtrarMovimentosPorPeriodo(filtro){
+    var hoje = todayISO();
+    if(filtro === "hoje") return state.movimentosEstoque.filter(function(m){ return m.data === hoje; });
+    if(filtro === "mes") return state.movimentosEstoque.filter(function(m){ return m.data.slice(0,7) === hoje.slice(0,7); });
+    if(filtro === "ano") return state.movimentosEstoque.filter(function(m){ return m.data.slice(0,4) === hoje.slice(0,4); });
+    return state.movimentosEstoque.slice();
+  }
+
+  function renderMovimentacao(){
+    var busca = (document.getElementById("buscaMovimentacao").value || "").trim().toLowerCase();
+    var list = filtrarMovimentosPorPeriodo(movimentacaoFiltro)
+      .filter(function(m){ return !busca || m.produtoNome.toLowerCase().indexOf(busca) !== -1; })
+      .slice().sort(function(a,b){ return (b.criadoEm || b.data).localeCompare(a.criadoEm || a.data); });
+
+    var tbody = document.getElementById("tblMovimentacao");
+    tbody.innerHTML = list.length === 0
+      ? '<tr class="empty-row"><td colspan="5">Nenhuma movimentação encontrada.</td></tr>'
+      : list.map(function(m){
+          var sinal = m.delta > 0 ? "+" : "";
+          var cor = m.delta > 0 ? "var(--ok)" : "var(--danger)";
+          var origemLabel = ORIGEM_MOVIMENTO_LABELS[m.origemTipo] || m.origemTipo;
+          return '<tr>' +
+            '<td>' + fmtDate(m.data) + '</td>' +
+            '<td class="cell-strong">' + esc(m.produtoNome) + '</td>' +
+            '<td style="font-weight:700;color:' + cor + ';">' + sinal + m.delta + '</td>' +
+            '<td>' + esc(origemLabel) + (m.motivo ? ' <span class="cell-sub">— ' + esc(m.motivo) + '</span>' : '') + '</td>' +
+            '<td>' + (m.estoqueResultante != null ? m.estoqueResultante : "-") + '</td>' +
+          '</tr>';
+        }).join("");
+
+    var valorProdutos = state.produtos.reduce(function(s,p){ return s + (p.estoque||0) * (p.custo||0); }, 0);
+    var celularesDisponiveis = state.celulares.filter(function(c){ return c.status === "disponivel"; });
+    var valorCelulares = celularesDisponiveis.reduce(function(s,c){ return s + (c.custo||0); }, 0);
+    document.getElementById("kpiValorEstoque").textContent = brl(valorProdutos + valorCelulares);
+    document.getElementById("kpiValorEstoqueSub").textContent = state.produtos.length + " produtos · " + celularesDisponiveis.length + " aparelhos";
+
+    var baixoEstoque = state.produtos.filter(function(p){ return p.estoqueMinimo > 0 && p.estoque <= p.estoqueMinimo; });
+    document.getElementById("kpiQtdEstoqueBaixo").textContent = baixoEstoque.length;
+    document.getElementById("kpiQtdEstoqueBaixoSub").textContent = baixoEstoque.length === 0
+      ? "nenhum abaixo do mínimo"
+      : baixoEstoque.length + (baixoEstoque.length === 1 ? " produto abaixo do mínimo" : " produtos abaixo do mínimo");
+  }
+
+  document.getElementById("movimentacaoFiltros").addEventListener("click", function(e){
+    var btn = e.target.closest("[data-mv-filtro]");
+    if(!btn) return;
+    movimentacaoFiltro = btn.dataset.mvFiltro;
+    document.querySelectorAll("#movimentacaoFiltros [data-mv-filtro]").forEach(function(b){
+      b.classList.toggle("btn-primary", b === btn);
+      b.classList.toggle("btn-ghost", b !== btn);
+    });
+    renderMovimentacao();
+  });
+  document.getElementById("buscaMovimentacao").addEventListener("input", renderMovimentacao);
 
   function quebraFormAvulsaHtml(){
     return (
@@ -851,9 +943,10 @@
         var prod = state.produtos.find(function(p){ return p.id === produtoId; });
         if(!prod){ toast("Produto não encontrado"); return; }
         if(qtd > prod.estoque){ toast("Estoque insuficiente para " + prod.nome); return; }
-        baixarEstoqueItens([{ produtoId: produtoId, qtd: qtd }]);
+        var quebraId = uid();
+        baixarEstoqueItens([{ produtoId: produtoId, qtd: qtd }], { tipo: "quebra", id: quebraId, motivo: "Perda avulsa" + (motivo ? ": " + motivo : "") });
         state.quebras.push({
-          id: uid(),
+          id: quebraId,
           tipo: "avulsa",
           data: data,
           produtoId: produtoId,
@@ -942,9 +1035,10 @@
         var prod = state.produtos.find(function(p){ return p.id === item.produtoId; });
         if(!prod){ toast("Produto não encontrado no estoque"); return; }
         if(qtd > prod.estoque){ toast("Estoque insuficiente para repor " + prod.nome); return; }
-        baixarEstoqueItens([{ produtoId: item.produtoId, qtd: qtd }]);
+        var quebraId = uid();
+        baixarEstoqueItens([{ produtoId: item.produtoId, qtd: qtd }], { tipo: "troca", id: quebraId, motivo: "Troca de garantia — venda de " + clienteNome(v.clienteId) });
         state.quebras.push({
-          id: uid(),
+          id: quebraId,
           tipo: "troca",
           data: data,
           produtoId: item.produtoId,
@@ -1909,6 +2003,7 @@
 
         function finalizarVenda(){
           if(isEdit){
+            var origemVenda = { tipo: "venda", id: venda.id, motivo: "Venda de " + clienteNome(clienteId) };
             venda.clienteId = clienteId;
             venda.vendedor = vendedor;
             venda.desconto = desconto;
@@ -1916,18 +2011,12 @@
             venda.pagamentos = pagamentos;
             venda.data = dataEscolhida;
 
-            venda.itens.forEach(function(i){
-              var prod = state.produtos.find(function(p){ return p.id === i.produtoId; });
-              if(prod) prod.estoque = Math.max(0, prod.estoque + i.qtd);
-            });
+            restaurarEstoqueItens(venda.itens, origemVenda);
 
             venda.itens = itens;
             venda.total = total;
 
-            itens.forEach(function(i){
-              var prod = state.produtos.find(function(p){ return p.id === i.produtoId; });
-              if(prod) prod.estoque = Math.max(0, prod.estoque - i.qtd);
-            });
+            baixarEstoqueItens(itens, origemVenda);
 
             sincronizarReceberDaVenda(venda);
             toast("Venda atualizada");
@@ -1945,10 +2034,7 @@
               pagamentos: pagamentos
             };
 
-            itens.forEach(function(i){
-              var prod = state.produtos.find(function(p){ return p.id === i.produtoId; });
-              if(prod) prod.estoque = Math.max(0, prod.estoque - i.qtd);
-            });
+            baixarEstoqueItens(itens, { tipo: "venda", id: novaVenda.id, motivo: "Venda de " + clienteNome(clienteId) });
 
             state.vendas.push(novaVenda);
             sincronizarReceberDaVenda(novaVenda);
@@ -2042,7 +2128,7 @@
       body.querySelector("#btnCancel").addEventListener("click", abrirDevolucoes);
       body.querySelector("#btnConfirmarDevolucao").addEventListener("click", function(){
         var voltarEstoque = temItemDeEstoque && body.querySelector("#fDevolverEstoque").checked;
-        if(voltarEstoque) restaurarEstoqueItens(v.itens);
+        if(voltarEstoque) restaurarEstoqueItens(v.itens, { tipo: "devolucao", id: v.id, motivo: "Devolução — venda de " + clienteNome(v.clienteId) });
 
         v.devolvida = true;
         v.devolvidoEm = new Date().toISOString();
@@ -2257,17 +2343,42 @@
     return a.descricao || "-";
   }
 
-  function restaurarEstoqueItens(itens){
-    (itens || []).forEach(function(i){
-      var p = state.produtos.find(function(p){ return p.id === i.produtoId; });
-      if(p) p.estoque = Math.max(0, p.estoque + i.qtd);
+  // Registra cada entrada/saída de estoque num extrato auditável (Movimentação),
+  // pra dar pra reconstituir depois "por que" o estoque está nesse número.
+  function registrarMovimentoEstoque(produtoId, delta, origem){
+    if(!produtoId || !delta) return;
+    var p = state.produtos.find(function(p){ return p.id === produtoId; });
+    state.movimentosEstoque.push({
+      id: uid(),
+      data: todayISO(),
+      criadoEm: new Date().toISOString(),
+      produtoId: produtoId,
+      produtoNome: p ? p.nome : "(produto excluído)",
+      delta: delta,
+      estoqueResultante: p ? p.estoque : null,
+      origemTipo: (origem && origem.tipo) || "ajuste",
+      origemId: (origem && origem.id) || null,
+      motivo: (origem && origem.motivo) || ""
     });
   }
 
-  function baixarEstoqueItens(itens){
+  function restaurarEstoqueItens(itens, origem){
+    (itens || []).forEach(function(i){
+      var p = state.produtos.find(function(p){ return p.id === i.produtoId; });
+      if(p){
+        p.estoque = Math.max(0, p.estoque + i.qtd);
+        registrarMovimentoEstoque(i.produtoId, i.qtd, origem);
+      }
+    });
+  }
+
+  function baixarEstoqueItens(itens, origem){
     itens.forEach(function(i){
       var p = state.produtos.find(function(p){ return p.id === i.produtoId; });
-      if(p) p.estoque = Math.max(0, p.estoque - i.qtd);
+      if(p){
+        p.estoque = Math.max(0, p.estoque - i.qtd);
+        registrarMovimentoEstoque(i.produtoId, -i.qtd, origem);
+      }
     });
   }
 
@@ -2442,19 +2553,21 @@
 
         if(itensNovos.length === 0){ toast("Adicione ao menos uma peça, produto ou serviço com valor"); return; }
 
-        if(isEdit) restaurarEstoqueItens(a.itens);
+        var assistId = isEdit ? a.id : uid();
+        var origemAssist = { tipo: "assistencia", id: assistId, motivo: "Assistência técnica — " + (aparelho || servico) };
+        if(isEdit) restaurarEstoqueItens(a.itens, origemAssist);
         var faltouEstoque = itensNovos.find(function(i){
           if(!i.produtoId) return false;
           var p = state.produtos.find(function(p){ return p.id === i.produtoId; });
           return p && i.qtd > p.estoque;
         });
         if(faltouEstoque){
-          if(isEdit) baixarEstoqueItens(a.itens);
+          if(isEdit) baixarEstoqueItens(a.itens, origemAssist);
           var prodFaltante = state.produtos.find(function(p){ return p.id === faltouEstoque.produtoId; });
           toast("Estoque insuficiente para " + (prodFaltante ? prodFaltante.nome : "a peça selecionada"));
           return;
         }
-        baixarEstoqueItens(itensNovos);
+        baixarEstoqueItens(itensNovos, origemAssist);
 
         if(isEdit){
           a.clienteId = clienteId;
@@ -2469,7 +2582,7 @@
           toast("Assistência atualizada");
         } else {
           state.assistencias.push({
-            id: uid(),
+            id: assistId,
             clienteId: clienteId,
             vendedor: vendedor,
             aparelho: aparelho,
@@ -3139,9 +3252,9 @@
         if(isEdit){
           if(conta.produtoId !== produtoId){
             if(prod.estoque <= 0){ toast("Estoque insuficiente para " + prod.nome); return; }
-            var prodAntigo = state.produtos.find(function(p){ return p.id === conta.produtoId; });
-            if(prodAntigo) prodAntigo.estoque = Math.max(0, prodAntigo.estoque + 1);
-            prod.estoque = Math.max(0, prod.estoque - 1);
+            var origemDevedorEdit = { tipo: "devedor", id: conta.id, motivo: "Fiado — " + clienteNome(clienteId) };
+            if(conta.produtoId) restaurarEstoqueItens([{ produtoId: conta.produtoId, qtd: 1 }], origemDevedorEdit);
+            baixarEstoqueItens([{ produtoId: produtoId, qtd: 1 }], origemDevedorEdit);
           }
           conta.clienteId = clienteId;
           conta.descricao = clienteNome(clienteId);
@@ -3153,9 +3266,10 @@
           toast("Devedor atualizado");
         } else {
           if(prod.estoque <= 0){ toast("Estoque insuficiente para " + prod.nome); return; }
-          prod.estoque = Math.max(0, prod.estoque - 1);
+          var devedorId = uid();
+          baixarEstoqueItens([{ produtoId: produtoId, qtd: 1 }], { tipo: "devedor", id: devedorId, motivo: "Fiado — " + clienteNome(clienteId) });
           state.contas.push({
-            id: uid(),
+            id: devedorId,
             clienteId: clienteId,
             descricao: clienteNome(clienteId),
             tipo: "receber",
@@ -3193,13 +3307,14 @@
       body.querySelectorAll("[data-forma-pagto]").forEach(function(btn){
         btn.addEventListener("click", function(){
           var forma = btn.dataset.formaPagto;
+          var prodDevedor = state.produtos.find(function(p){ return p.id === c.produtoId; });
           state.vendas.push({
             id: uid(),
             data: todayISO(),
             criadoEm: new Date().toISOString(),
             clienteId: c.clienteId || null,
             vendedor: c.vendedor || null,
-            itens: [{ produtoId: c.produtoId, nome: c.produtoNome || c.descricao, qtd: 1, precoUnit: c.valor }],
+            itens: [{ produtoId: c.produtoId, nome: c.produtoNome || c.descricao, qtd: 1, precoUnit: c.valor, custoUnit: prodDevedor ? (prodDevedor.custo || 0) : 0 }],
             total: c.valor,
             desconto: 0,
             pagamento: forma,
@@ -3793,6 +3908,7 @@
     renderProdutos(document.getElementById("buscaProdutos").value);
     renderEstoqueCelular();
     renderQuebras();
+    renderMovimentacao();
     renderPecas(document.getElementById("buscaPecas").value);
     renderVendas(document.getElementById("buscaVendas").value);
     renderAssistencias();

@@ -42,6 +42,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
         Quebra
       </a></li>
+      <li><a data-view="movimentacao">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h11"/><path d="m17 15 3 3 3-3"/></svg>
+        Movimentação
+      </a></li>
       <li><a data-view="pecas">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.6 2H4a2 2 0 0 0-2 2v8.6a2 2 0 0 0 .6 1.4l9 9a2 2 0 0 0 2.8 0l7.6-7.6a2 2 0 0 0 0-2.8l-9-9A2 2 0 0 0 12.6 2Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
         Peças
@@ -245,10 +249,57 @@
             <h2>Quebra (Garantia)</h2>
             <button class="btn btn-primary" id="btnNovaQuebra">+ Registrar quebra</button>
           </div>
+          <div class="vd-filtros" id="quebraFiltros" style="margin:0 0 1rem;">
+            <button type="button" class="btn btn-sm btn-ghost" data-qb-filtro="hoje">Hoje</button>
+            <button type="button" class="btn btn-sm btn-primary" data-qb-filtro="mes">Este mês</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-qb-filtro="ano">Este ano</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-qb-filtro="tudo">Tudo</button>
+          </div>
+          <div class="fechamento-detalhes" style="margin-bottom:1rem;" id="quebraResumo"></div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Data</th><th>Tipo</th><th>Peça / Produto</th><th>Qtd</th><th>Motivo</th><th>Cliente</th><th></th></tr></thead>
               <tbody id="tblQuebras"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- MOVIMENTAÇÃO DE ESTOQUE -->
+      <section id="view-movimentacao" class="view hidden">
+        <div class="kpi-grid">
+          <div class="kpi-card kpi-card-solid kpi-solid-ok">
+            <div class="kpi-label">Valor investido em estoque</div>
+            <div class="kpi-value kpi-value-lg kpi-value-green" id="kpiValorEstoque">R$ 0,00</div>
+            <div class="kpi-sub" id="kpiValorEstoqueSub">0 produtos · 0 aparelhos</div>
+          </div>
+          <div class="kpi-card kpi-card-solid kpi-solid-danger">
+            <div class="kpi-label">Produtos com estoque baixo</div>
+            <div class="kpi-value kpi-value-lg kpi-value-red" id="kpiQtdEstoqueBaixo">0</div>
+            <div class="kpi-sub danger" id="kpiQtdEstoqueBaixoSub">nenhum abaixo do mínimo</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Movimentação de Estoque</h2>
+            <div style="display:flex;gap:0.6rem;">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="buscaMovimentacao" placeholder="Buscar produto...">
+              </div>
+            </div>
+          </div>
+          <div class="vd-filtros" id="movimentacaoFiltros" style="margin:0 0 1rem;">
+            <button type="button" class="btn btn-sm btn-ghost" data-mv-filtro="hoje">Hoje</button>
+            <button type="button" class="btn btn-sm btn-primary" data-mv-filtro="mes">Este mês</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-mv-filtro="ano">Este ano</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-mv-filtro="tudo">Tudo</button>
+          </div>
+          <p style="margin:0 0 1rem;color:var(--ink-dim);font-size:0.85rem;">Todo lançamento que mexe no estoque (venda, devolução, quebra, troca de garantia, assistência, ajuste manual) fica registrado aqui, com data e motivo.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Data</th><th>Produto</th><th>Movimento</th><th>Origem</th><th>Estoque resultante</th></tr></thead>
+              <tbody id="tblMovimentacao"></tbody>
             </table>
           </div>
         </div>
