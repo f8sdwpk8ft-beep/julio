@@ -80,6 +80,90 @@
   }
   function closeModal(){ modalRoot.innerHTML = ""; }
 
+  // ---------- Overlay independente ----------
+  // window.confirm()/prompt() não funcionam dentro do sandbox do Artifact
+  // publicado (o navegador simplesmente não mostra nada e cancela na hora),
+  // então toda confirmação/senha/texto rápido usa este overlay próprio,
+  // que fica por cima de qualquer modal já aberto sem destruí-lo.
+  function abrirOverlay(titulo, bodyHtml, onMount){
+    var overlay = document.createElement("div");
+    overlay.className = "modal-backdrop overlay-topo";
+    overlay.innerHTML =
+      '<div class="modal">' +
+        '<div class="modal-head"><h3>' + esc(titulo) + '</h3>' +
+          '<button class="modal-close" id="overlayClose">&times;</button></div>' +
+        '<div id="overlayBody">' + bodyHtml + '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    function fechar(){ overlay.remove(); }
+    overlay.querySelector("#overlayClose").addEventListener("click", fechar);
+    overlay.addEventListener("click", function(e){ if(e.target === overlay) fechar(); });
+    if(onMount) onMount(overlay.querySelector("#overlayBody"), fechar);
+    return fechar;
+  }
+
+  function confirmarExclusao(mensagem, onConfirm){
+    abrirOverlay("Confirmar exclusão", (
+      '<p style="margin:0 0 1rem;color:var(--ink-dim);">' + esc(mensagem) + '</p>' +
+      '<div class="field"><label>Senha de administrador</label><input id="fSenhaExcluir" type="password" inputmode="numeric" placeholder="Digite a senha"></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancelExcluir">Cancelar</button><button class="btn btn-danger" id="btnConfirmarExclusao">Excluir</button></div>'
+    ), function(body, fechar){
+      var input = body.querySelector("#fSenhaExcluir");
+      input.focus();
+      body.querySelector("#btnCancelExcluir").addEventListener("click", fechar);
+      function tentar(){
+        if(input.value === state.adminCode){
+          fechar();
+          onConfirm();
+        } else {
+          toast("Senha incorreta");
+        }
+      }
+      body.querySelector("#btnConfirmarExclusao").addEventListener("click", tentar);
+      input.addEventListener("keydown", function(e){ if(e.key === "Enter") tentar(); });
+    });
+  }
+
+  function pedirSenhaVendedor(onConfirm){
+    abrirOverlay("Liberar desconto", (
+      '<div class="field"><label>Senha do vendedor</label><input id="fSenhaVendedorOverlay" type="password" inputmode="numeric" placeholder="Digite a senha"></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancelSenhaVendedor">Cancelar</button><button class="btn btn-primary" id="btnConfirmarSenhaVendedor">Confirmar</button></div>'
+    ), function(body, fechar){
+      var input = body.querySelector("#fSenhaVendedorOverlay");
+      input.focus();
+      body.querySelector("#btnCancelSenhaVendedor").addEventListener("click", fechar);
+      function tentar(){
+        if(input.value === state.sellerDiscountCode){
+          fechar();
+          onConfirm();
+        } else {
+          toast("Senha incorreta");
+        }
+      }
+      body.querySelector("#btnConfirmarSenhaVendedor").addEventListener("click", tentar);
+      input.addEventListener("keydown", function(e){ if(e.key === "Enter") tentar(); });
+    });
+  }
+
+  function pedirTexto(titulo, label, onConfirm){
+    abrirOverlay(titulo, (
+      '<div class="field"><label>' + esc(label) + '</label><input id="fTextoOverlay"></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancelTexto">Cancelar</button><button class="btn btn-primary" id="btnConfirmarTexto">Confirmar</button></div>'
+    ), function(body, fechar){
+      var input = body.querySelector("#fTextoOverlay");
+      input.focus();
+      body.querySelector("#btnCancelTexto").addEventListener("click", fechar);
+      function confirmarClick(){
+        var val = input.value.trim();
+        if(!val) return;
+        fechar();
+        onConfirm(val);
+      }
+      body.querySelector("#btnConfirmarTexto").addEventListener("click", confirmarClick);
+      input.addEventListener("keydown", function(e){ if(e.key === "Enter") confirmarClick(); });
+    });
+  }
+
   // ---------- Campos numéricos: some o "0" ao focar, pra digitar direto ----------
   document.addEventListener("focusin", function(e){
     if(e.target.tagName === "INPUT" && e.target.type === "number" && e.target.value === "0"){
@@ -228,10 +312,10 @@
     var delId = e.target.dataset.delCliente;
     if(editId) openClienteModal(editId);
     if(delId){
-      if(confirm("Excluir este cliente?")){
+      confirmarExclusao("Excluir este cliente?", function(){
         state.clientes = state.clientes.filter(function(c){ return c.id !== delId; });
         saveData(); renderAll(); toast("Cliente excluído");
-      }
+      });
     }
   });
 
@@ -307,15 +391,13 @@
         });
       }
       body.querySelector("#btnNovaCategoria").addEventListener("click", function(){
-        var nome = prompt("Nome da nova categoria:");
-        if(!nome) return;
-        nome = nome.trim();
-        if(!nome) return;
-        if(state.categorias.indexOf(nome) === -1){
-          state.categorias.push(nome);
-          saveData();
-        }
-        body.querySelector("#fCategoria").innerHTML = categoriaOptionsHtml(nome);
+        pedirTexto("Nova categoria", "Nome da categoria", function(nome){
+          if(state.categorias.indexOf(nome) === -1){
+            state.categorias.push(nome);
+            saveData();
+          }
+          body.querySelector("#fCategoria").innerHTML = categoriaOptionsHtml(nome);
+        });
       });
       body.querySelector("#btnSave").addEventListener("click", function(){
         var nome = body.querySelector("#fNome").value.trim();
@@ -350,10 +432,10 @@
     var delId = e.target.dataset.delProduto;
     if(editId) openProdutoModal(editId);
     if(delId){
-      if(confirm("Excluir este produto?")){
+      confirmarExclusao("Excluir este produto?", function(){
         state.produtos = state.produtos.filter(function(p){ return p.id !== delId; });
         saveData(); renderAll(); toast("Produto excluído");
-      }
+      });
     }
   });
 
@@ -421,10 +503,10 @@
     var delId = e.target.dataset.delPeca;
     if(editId) openPecaModal(editId);
     if(delId){
-      if(confirm("Excluir esta peça da tabela de preços?")){
+      confirmarExclusao("Excluir esta peça da tabela de preços?", function(){
         state.pecasPreco = state.pecasPreco.filter(function(pc){ return pc.id !== delId; });
         saveData(); renderAll(); toast("Peça excluída");
-      }
+      });
     }
   });
 
@@ -556,10 +638,10 @@
     if(editId) openCelularModal(editId);
     if(venderId) abrirVenderCelular(venderId);
     if(delId){
-      if(confirm("Excluir este aparelho do estoque?")){
+      confirmarExclusao("Excluir este aparelho do estoque?", function(){
         state.celulares = state.celulares.filter(function(c){ return c.id !== delId; });
         saveData(); renderAll(); toast("Aparelho excluído");
-      }
+      });
     }
   });
 
@@ -588,26 +670,22 @@
     ), function(body){
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
       body.querySelector("#btnNovoClienteCelInline").addEventListener("click", function(){
-        var nome = prompt("Nome do novo cliente:");
-        if(!nome) return;
-        nome = nome.trim();
-        if(!nome) return;
-        var novoCliente = { id: uid(), nome: nome, cpf: "", cnpj: "", telefone: "", email: "", obs: "" };
-        state.clientes.push(novoCliente);
-        saveData();
-        body.querySelector("#fCelVendaCliente").innerHTML = clienteOptionsHtml(novoCliente.id, "Consumidor");
-        toast("Cliente cadastrado");
+        pedirTexto("Novo cliente", "Nome do cliente", function(nome){
+          var novoCliente = { id: uid(), nome: nome, cpf: "", cnpj: "", telefone: "", email: "", obs: "" };
+          state.clientes.push(novoCliente);
+          saveData();
+          body.querySelector("#fCelVendaCliente").innerHTML = clienteOptionsHtml(novoCliente.id, "Consumidor");
+          toast("Cliente cadastrado");
+        });
       });
       body.querySelector("#btnNovoVendedorCelInline").addEventListener("click", function(){
-        var nome = prompt("Nome do novo vendedor:");
-        if(!nome) return;
-        nome = nome.trim();
-        if(!nome) return;
-        if(state.vendedores.indexOf(nome) === -1){
-          state.vendedores.push(nome);
-          saveData();
-        }
-        body.querySelector("#fCelVendaVendedor").innerHTML = vendedorOptionsHtml(nome);
+        pedirTexto("Novo vendedor", "Nome do vendedor", function(nome){
+          if(state.vendedores.indexOf(nome) === -1){
+            state.vendedores.push(nome);
+            saveData();
+          }
+          body.querySelector("#fCelVendaVendedor").innerHTML = vendedorOptionsHtml(nome);
+        });
       });
       body.querySelectorAll("[data-forma-pagto]").forEach(function(btn){
         btn.addEventListener("click", function(){
@@ -729,23 +807,26 @@
     var elegiveis = vendasAtivas().filter(function(v){ return v.itens.some(function(i){ return i.produtoId; }); })
       .slice().sort(function(a,b){ return (b.criadoEm || b.data).localeCompare(a.criadoEm || a.data); });
 
-    var linhas = elegiveis.length === 0
-      ? '<tr class="empty-row"><td colspan="5">Nenhuma venda com produto de estoque encontrada.</td></tr>'
-      : elegiveis.map(function(v){
-          return '<tr>' +
-            '<td>' + fmtDate(v.data) + '</td>' +
-            '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + '</td>' +
-            '<td>' + esc(v.itens.map(function(i){ return i.qtd + "x " + i.nome; }).join(", ")) + '</td>' +
-            '<td class="cell-strong">' + brl(v.total) + '</td>' +
-            '<td class="cell-actions"><button class="btn btn-secondary btn-sm" data-quebra-venda="' + v.id + '">Selecionar</button></td>' +
-          '</tr>';
-        }).join("");
+    function linhasHtml(lista){
+      return lista.length === 0
+        ? '<tr class="empty-row"><td colspan="5">Nenhuma venda encontrada.</td></tr>'
+        : lista.map(function(v){
+            return '<tr>' +
+              '<td>' + fmtDate(v.data) + '</td>' +
+              '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + '</td>' +
+              '<td>' + esc(v.itens.map(function(i){ return i.qtd + "x " + i.nome; }).join(", ")) + '</td>' +
+              '<td class="cell-strong">' + brl(v.total) + '</td>' +
+              '<td class="cell-actions"><button class="btn btn-secondary btn-sm" data-quebra-venda="' + v.id + '">Selecionar</button></td>' +
+            '</tr>';
+          }).join("");
+    }
 
     openModal("Escolha a venda", (
       '<p style="margin:0 0 1rem;color:var(--ink-dim);">Escolha a venda do produto que quebrou (garantia). O produto é reposto do estoque, sem cobrar de novo do cliente.</p>' +
+      '<div class="field"><label>Buscar por cliente ou produto</label><input type="text" id="quebraVendaBusca" placeholder="Digite para buscar..."></div>' +
       '<div class="vd-lista-wrap table-wrap">' +
         '<table><thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Total</th><th></th></tr></thead>' +
-        '<tbody id="quebraVendaTbody">' + linhas + '</tbody></table>' +
+        '<tbody id="quebraVendaTbody">' + linhasHtml(elegiveis) + '</tbody></table>' +
       '</div>' +
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Fechar</button></div>'
     ), function(body){
@@ -753,6 +834,9 @@
       body.querySelector("#quebraVendaTbody").addEventListener("click", function(e){
         var btn = e.target.closest("[data-quebra-venda]");
         if(btn) abrirQuebraTrocaItem(btn.dataset.quebraVenda);
+      });
+      body.querySelector("#quebraVendaBusca").addEventListener("input", function(e){
+        body.querySelector("#quebraVendaTbody").innerHTML = linhasHtml(filtrarVendasPorBusca(elegiveis, e.target.value));
       });
     }, { large: true });
   }
@@ -814,10 +898,10 @@
   document.getElementById("tblQuebras").addEventListener("click", function(e){
     var delId = e.target.dataset.delQuebra;
     if(delId){
-      if(confirm("Excluir este registro de quebra? O estoque não será restaurado automaticamente.")){
+      confirmarExclusao("Excluir este registro de quebra? O estoque não será restaurado automaticamente.", function(){
         state.quebras = state.quebras.filter(function(q){ return q.id !== delId; });
         saveData(); renderAll(); toast("Registro de quebra excluído");
-      }
+      });
     }
   });
 
@@ -883,6 +967,17 @@
     return base.filter(function(v){ return v.data === hoje; });
   }
 
+  // Busca por texto (cliente ou nome do item) dentro de uma lista de vendas
+  // já filtrada por período — usada nos modais de detalhe/histórico de vendas.
+  function filtrarVendasPorBusca(lista, busca){
+    var buscaLower = (busca || "").trim().toLowerCase();
+    if(!buscaLower) return lista;
+    return lista.filter(function(v){
+      if(clienteNome(v.clienteId).toLowerCase().indexOf(buscaLower) !== -1) return true;
+      return v.itens.some(function(i){ return i.nome.toLowerCase().indexOf(buscaLower) !== -1; });
+    });
+  }
+
   function filtrarDespesasPorPeriodo(filtro, rangeInicio, rangeFim){
     var todasPagar = state.contas.filter(function(c){ return c.tipo === "pagar"; });
     var hoje = todayISO();
@@ -901,6 +996,7 @@
       '<div class="vd-filtros">' +
         chip("hoje", "Hoje") + chip("ontem", "Ontem") + chip("mes", "Este mês") + chip("ano", "Este ano") + chip("tudo", "Todo o histórico") +
       '</div>' +
+      '<div class="field"><label>Buscar por cliente ou produto/serviço</label><input type="text" id="vdBusca" placeholder="Digite para buscar..."></div>' +
       '<div class="field"><label>Ou escolha um dia</label><input type="date" id="vdData" value="' + (dataCustom || todayISO()) + '"></div>' +
       '<div class="vd-lista-wrap table-wrap">' +
         '<table><thead><tr><th>Data</th><th>Horário</th><th>Cliente</th><th>Total</th></tr></thead><tbody id="vdTbody"></tbody></table>' +
@@ -1000,12 +1096,12 @@
 
     openModal("Vendas", vendasDetalheHtml(estadoFiltro.filtro, estadoFiltro.data), function(body){
       function renderLista(){
-        var lista = filtrarVendasPorPeriodo(estadoFiltro.filtro, estadoFiltro.data).sort(function(a,b){
+        var lista = filtrarVendasPorBusca(filtrarVendasPorPeriodo(estadoFiltro.filtro, estadoFiltro.data), body.querySelector("#vdBusca").value).sort(function(a,b){
           return (b.criadoEm || b.data).localeCompare(a.criadoEm || a.data);
         });
         var tbody = body.querySelector("#vdTbody");
         tbody.innerHTML = lista.length === 0
-          ? '<tr class="empty-row"><td colspan="4">Nenhuma venda neste período.</td></tr>'
+          ? '<tr class="empty-row"><td colspan="4">Nenhuma venda encontrada.</td></tr>'
           : lista.map(function(v){
               return '<tr class="vd-row" data-vd-venda="' + v.id + '">' +
                 '<td>' + fmtDate(v.data) + '</td>' +
@@ -1032,6 +1128,8 @@
           renderLista();
         });
       });
+
+      body.querySelector("#vdBusca").addEventListener("input", renderLista);
 
       body.querySelector("#vdData").addEventListener("change", function(e){
         estadoFiltro.filtro = "data";
@@ -1133,12 +1231,12 @@
 
     openModal("Total de vendas", vendasDetalheHtml(estadoFiltro.filtro, estadoFiltro.data), function(body){
       function renderLista(){
-        var lista = filtrarVendasPorPeriodo(estadoFiltro.filtro, estadoFiltro.data).sort(function(a,b){
+        var lista = filtrarVendasPorBusca(filtrarVendasPorPeriodo(estadoFiltro.filtro, estadoFiltro.data), body.querySelector("#vdBusca").value).sort(function(a,b){
           return (b.criadoEm || b.data).localeCompare(a.criadoEm || a.data);
         });
         var tbody = body.querySelector("#vdTbody");
         tbody.innerHTML = lista.length === 0
-          ? '<tr class="empty-row"><td colspan="4">Nenhuma venda neste período.</td></tr>'
+          ? '<tr class="empty-row"><td colspan="4">Nenhuma venda encontrada.</td></tr>'
           : lista.map(function(v){
               return '<tr class="vd-row" data-vd-venda="' + v.id + '">' +
                 '<td>' + fmtDate(v.data) + '</td>' +
@@ -1165,6 +1263,8 @@
           renderLista();
         });
       });
+
+      body.querySelector("#vdBusca").addEventListener("input", renderLista);
 
       body.querySelector("#vdData").addEventListener("change", function(e){
         estadoFiltro.filtro = "data";
@@ -1324,12 +1424,12 @@
 
     openModal("Vendas de hoje", vendasDetalheHtml("data", hoje), function(body){
       function renderLista(){
-        var lista = vendasHoje.sort(function(a,b){
+        var lista = filtrarVendasPorBusca(vendasHoje, body.querySelector("#vdBusca").value).sort(function(a,b){
           return (b.criadoEm || b.data).localeCompare(a.criadoEm || a.data);
         });
         var tbody = body.querySelector("#vdTbody");
         tbody.innerHTML = lista.length === 0
-          ? '<tr class="empty-row"><td colspan="4">Nenhuma venda hoje.</td></tr>'
+          ? '<tr class="empty-row"><td colspan="4">Nenhuma venda encontrada.</td></tr>'
           : lista.map(function(v){
               return '<tr class="vd-row" data-vd-venda="' + v.id + '">' +
                 '<td>' + fmtDate(v.data) + '</td>' +
@@ -1341,6 +1441,8 @@
         body.querySelector("#vdTotalValor").textContent = brl(lista.reduce(function(s,v){ return s + v.total; }, 0));
         body.querySelector("#vdPagamentos").innerHTML = pagamentosChipsHtml(lista);
       }
+
+      body.querySelector("#vdBusca").addEventListener("input", renderLista);
 
       body.querySelector("#vdTbody").addEventListener("click", function(e){
         var row = e.target.closest("[data-vd-venda]");
@@ -1610,28 +1712,22 @@
       });
 
       body.querySelector("#btnNovoVendedorInline").addEventListener("click", function(){
-        var nome = prompt("Nome do novo vendedor:");
-        if(!nome) return;
-        nome = nome.trim();
-        if(!nome) return;
-        if(state.vendedores.indexOf(nome) === -1){
-          state.vendedores.push(nome);
-          saveData();
-        }
-        body.querySelector("#fVendedor").innerHTML = vendedorOptionsHtml(nome);
+        pedirTexto("Novo vendedor", "Nome do vendedor", function(nome){
+          if(state.vendedores.indexOf(nome) === -1){
+            state.vendedores.push(nome);
+            saveData();
+          }
+          body.querySelector("#fVendedor").innerHTML = vendedorOptionsHtml(nome);
+        });
       });
 
       body.querySelector("#btnLiberarDesconto").addEventListener("click", function(){
-        var senha = prompt("Senha do vendedor para liberar o desconto:");
-        if(senha === null) return;
-        if(senha === state.sellerDiscountCode){
+        pedirSenhaVendedor(function(){
           var input = body.querySelector("#fDesconto");
           input.disabled = false;
           input.focus();
           toast("Desconto liberado");
-        } else {
-          toast("Senha incorreta");
-        }
+        });
       });
       body.querySelector("#fDesconto").addEventListener("input", recalcTotal);
 
@@ -1813,23 +1909,26 @@
     var elegiveis = state.vendas.filter(function(v){ return !v.devolvida; })
       .slice().sort(function(a,b){ return (b.criadoEm || b.data).localeCompare(a.criadoEm || a.data); });
 
-    var linhas = elegiveis.length === 0
-      ? '<tr class="empty-row"><td colspan="5">Nenhuma venda disponível para devolução.</td></tr>'
-      : elegiveis.map(function(v){
-          return '<tr>' +
-            '<td>' + fmtDate(v.data) + '</td>' +
-            '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + selosVenda(v) + '</td>' +
-            '<td>' + esc(v.itens.map(function(i){ return i.qtd + "x " + i.nome; }).join(", ")) + '</td>' +
-            '<td class="cell-strong">' + brl(v.total) + '</td>' +
-            '<td class="cell-actions"><button class="btn btn-danger btn-sm" data-devolver="' + v.id + '">Devolver</button></td>' +
-          '</tr>';
-        }).join("");
+    function linhasHtml(lista){
+      return lista.length === 0
+        ? '<tr class="empty-row"><td colspan="5">Nenhuma venda encontrada.</td></tr>'
+        : lista.map(function(v){
+            return '<tr>' +
+              '<td>' + fmtDate(v.data) + '</td>' +
+              '<td class="cell-strong">' + esc(clienteNome(v.clienteId)) + selosVenda(v) + '</td>' +
+              '<td>' + esc(v.itens.map(function(i){ return i.qtd + "x " + i.nome; }).join(", ")) + '</td>' +
+              '<td class="cell-strong">' + brl(v.total) + '</td>' +
+              '<td class="cell-actions"><button class="btn btn-danger btn-sm" data-devolver="' + v.id + '">Devolver</button></td>' +
+            '</tr>';
+          }).join("");
+    }
 
     openModal("Devoluções", (
       '<p style="margin:0 0 1rem;color:var(--ink-dim);">Escolha a venda que o cliente devolveu. A venda inteira sai do caixa, dos fechamentos e das comissões.</p>' +
+      '<div class="field"><label>Buscar por cliente ou produto/serviço</label><input type="text" id="devBusca" placeholder="Digite para buscar..."></div>' +
       '<div class="vd-lista-wrap table-wrap">' +
         '<table><thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Total</th><th></th></tr></thead>' +
-        '<tbody id="devTbody">' + linhas + '</tbody></table>' +
+        '<tbody id="devTbody">' + linhasHtml(elegiveis) + '</tbody></table>' +
       '</div>' +
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Fechar</button></div>'
     ), function(body){
@@ -1837,6 +1936,9 @@
       body.querySelector("#devTbody").addEventListener("click", function(e){
         var btn = e.target.closest("[data-devolver]");
         if(btn) confirmarDevolucao(btn.dataset.devolver);
+      });
+      body.querySelector("#devBusca").addEventListener("input", function(e){
+        body.querySelector("#devTbody").innerHTML = linhasHtml(filtrarVendasPorBusca(elegiveis, e.target.value));
       });
     }, { large: true });
   }
@@ -2049,7 +2151,7 @@
       if(vendaEscolhida) openVendaModal(vendaEscolhida);
     }
     if(delId){
-      if(confirm("Excluir esta venda? O estoque não será restaurado automaticamente.")){
+      confirmarExclusao("Excluir esta venda? O estoque não será restaurado automaticamente.", function(){
         var vendaExcluida = state.vendas.find(function(v){ return v.id === delId; });
         state.vendas = state.vendas.filter(function(v){ return v.id !== delId; });
         state.contas = state.contas.filter(function(c){ return c.vendaId !== delId; });
@@ -2064,7 +2166,7 @@
           if(assist){ assist.status = "pendente"; assist.vendaId = null; }
         }
         saveData(); renderAll(); toast("Venda excluída");
-      }
+      });
     }
   });
 
@@ -2208,16 +2310,12 @@
       });
 
       body.querySelector("#btnLiberarDescontoAssist").addEventListener("click", function(){
-        var senha = prompt("Senha do vendedor para liberar o desconto:");
-        if(senha === null) return;
-        if(senha === state.sellerDiscountCode){
+        pedirSenhaVendedor(function(){
           var input = body.querySelector("#fAssistDesconto");
           input.disabled = false;
           input.focus();
           toast("Desconto liberado");
-        } else {
-          toast("Senha incorreta");
-        }
+        });
       });
       body.querySelector("#fAssistDesconto").addEventListener("input", recalcTotal);
       recalcTotal();
@@ -2225,27 +2323,23 @@
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
 
       body.querySelector("#btnNovoClienteAssistInline").addEventListener("click", function(){
-        var nome = prompt("Nome do novo cliente:");
-        if(!nome) return;
-        nome = nome.trim();
-        if(!nome) return;
-        var novoCliente = { id: uid(), nome: nome, cpf: "", cnpj: "", telefone: "", email: "", obs: "" };
-        state.clientes.push(novoCliente);
-        saveData();
-        body.querySelector("#fAssistCliente").innerHTML = clienteOptionsHtml(novoCliente.id, "Consumidor");
-        toast("Cliente cadastrado");
+        pedirTexto("Novo cliente", "Nome do cliente", function(nome){
+          var novoCliente = { id: uid(), nome: nome, cpf: "", cnpj: "", telefone: "", email: "", obs: "" };
+          state.clientes.push(novoCliente);
+          saveData();
+          body.querySelector("#fAssistCliente").innerHTML = clienteOptionsHtml(novoCliente.id, "Consumidor");
+          toast("Cliente cadastrado");
+        });
       });
 
       body.querySelector("#btnNovoVendedorAssistInline").addEventListener("click", function(){
-        var nome = prompt("Nome do novo vendedor:");
-        if(!nome) return;
-        nome = nome.trim();
-        if(!nome) return;
-        if(state.vendedores.indexOf(nome) === -1){
-          state.vendedores.push(nome);
-          saveData();
-        }
-        body.querySelector("#fAssistVendedor").innerHTML = vendedorOptionsHtml(nome);
+        pedirTexto("Novo vendedor", "Nome do vendedor", function(nome){
+          if(state.vendedores.indexOf(nome) === -1){
+            state.vendedores.push(nome);
+            saveData();
+          }
+          body.querySelector("#fAssistVendedor").innerHTML = vendedorOptionsHtml(nome);
+        });
       });
 
       body.querySelector("#btnSave").addEventListener("click", function(){
@@ -2340,7 +2434,6 @@
           }).join("") +
         '</div>'
       : "";
-    var formas = ["Dinheiro", "Cartão de crédito", "Cartão de débito", "Pix"];
     openModal("Confirmar retirada", (
       '<p style="margin:0 0 1rem;color:var(--ink-dim);">' + esc(clienteNome(a.clienteId)) + ' retirou: ' + esc(assistenciaDescricao(a)) + '</p>' +
       itensHtml +
@@ -2355,68 +2448,141 @@
         '<div class="venda-total-linha"><span>Peças / produtos</span><span>' + brl(subtotal) + '</span></div>' +
         '<div class="venda-total-linha venda-total-final"><span>Total a cobrar</span><span id="assistRetiradaTotal">' + brl(Math.max(0, subtotal - descontoAtual)) + '</span></div>' +
       '</div>' +
-      '<div class="field" style="margin-top:1rem;"><label>Forma de pagamento</label></div>' +
-      '<div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem;">' +
-        formas.map(function(f){ return '<button type="button" class="btn btn-ghost" data-forma-pagto="' + esc(f) + '">' + esc(f) + '</button>'; }).join("") +
+      '<div class="field" style="margin-top:1rem;">' +
+        '<label class="checkbox-inline"><input type="checkbox" id="fAssistDividirPagamento"> Dividir entre formas de pagamento</label>' +
+        '<select id="fAssistPagamento">' + vendaPagamentoOptionsHtml("Dinheiro") + '</select>' +
       '</div>' +
-      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button></div>'
+      '<div class="pgto-split hidden" id="assistPgtoSplit">' +
+        '<div id="assistPgtoSplitRows">' + pagamentoSplitRowHtml(null, 0) + '</div>' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="btnAssistAddSplit" style="margin-top:0.4rem;">+ Adicionar forma</button>' +
+        '<div class="pgto-split-status" id="assistPgtoSplitStatus"></div>' +
+      '</div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button><button class="btn btn-primary" id="btnConfirmarRetirada">Confirmar retirada</button></div>'
     ), function(body){
+      var splitRowsEl = body.querySelector("#assistPgtoSplitRows");
+      var splitRowCount = 1;
+
       function descontoFinal(){
         return Math.min(parseFloat(body.querySelector("#fAssistDescontoFinal").value) || 0, subtotal);
       }
+      function totalFinal(){
+        return Math.max(0, subtotal - descontoFinal());
+      }
+      function recalcSplitStatus(){
+        if(!body.querySelector("#fAssistDividirPagamento").checked) return;
+        var total = totalFinal();
+        var alocado = 0;
+        splitRowsEl.querySelectorAll(".pgto-split-row").forEach(function(row){
+          alocado += parseFloat(row.querySelector(".ps-valor").value) || 0;
+        });
+        var diff = Math.round((total - alocado) * 100) / 100;
+        var statusEl = body.querySelector("#assistPgtoSplitStatus");
+        if(Math.abs(diff) < 0.01){
+          statusEl.innerHTML = '<span class="pgto-split-ok">OK - pagamento totalmente alocado</span>';
+        } else if(diff > 0){
+          statusEl.innerHTML = '<span class="pgto-split-falta">Falta alocar ' + brl(diff) + '</span>';
+        } else {
+          statusEl.innerHTML = '<span class="pgto-split-falta">' + brl(-diff) + ' a mais que o total</span>';
+        }
+      }
+
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
       body.querySelector("#btnLiberarDescontoRetirada").addEventListener("click", function(){
-        var senha = prompt("Senha do vendedor para liberar o desconto:");
-        if(senha === null) return;
-        if(senha === state.sellerDiscountCode){
+        pedirSenhaVendedor(function(){
           var input = body.querySelector("#fAssistDescontoFinal");
           input.disabled = false;
           input.focus();
           toast("Desconto liberado");
-        } else {
-          toast("Senha incorreta");
-        }
+        });
       });
       body.querySelector("#fAssistDescontoFinal").addEventListener("input", function(){
-        body.querySelector("#assistRetiradaTotal").textContent = brl(Math.max(0, subtotal - descontoFinal()));
+        body.querySelector("#assistRetiradaTotal").textContent = brl(totalFinal());
+        recalcSplitStatus();
       });
-      body.querySelectorAll("[data-forma-pagto]").forEach(function(btn){
-        btn.addEventListener("click", function(){
-          var forma = btn.dataset.formaPagto;
-          var desconto = descontoFinal();
-          var totalFinal = Math.max(0, subtotal - desconto);
-          if(totalFinal <= 0){ toast("Informe um valor válido"); return; }
 
-          var itensVenda = (a.itens || []).map(function(i){
-            return { produtoId: i.produtoId, nome: i.nome, qtd: i.qtd, precoUnit: i.precoUnit, custoUnit: i.custoUnit || 0 };
-          });
-          if(a.maoDeObra > 0){
-            itensVenda.push({ produtoId: null, nome: "Mão de obra: " + assistenciaDescricao(a), qtd: 1, precoUnit: a.maoDeObra, custoUnit: 0 });
+      function bindSplitRow(row){
+        row.querySelector(".ps-valor").addEventListener("input", recalcSplitStatus);
+        row.querySelector(".ps-forma").addEventListener("change", recalcSplitStatus);
+        row.querySelector(".ps-remove").addEventListener("click", function(){
+          if(splitRowsEl.querySelectorAll(".pgto-split-row").length > 1){
+            row.remove();
+            recalcSplitStatus();
           }
-
-          var novaVenda = {
-            id: uid(),
-            data: todayISO(),
-            criadoEm: new Date().toISOString(),
-            clienteId: a.clienteId,
-            vendedor: a.vendedor,
-            itens: itensVenda,
-            total: totalFinal,
-            desconto: desconto,
-            pagamento: forma,
-            pagamentos: [{ forma: forma, valor: totalFinal }],
-            origemAssistenciaId: a.id,
-            assistencia: true
-          };
-          state.vendas.push(novaVenda);
-          a.status = "concluido";
-          a.desconto = desconto;
-          a.vendaId = novaVenda.id;
-          saveData();
-          closeModal();
-          renderAll();
-          toast("Retirada confirmada e lançada no caixa");
         });
+      }
+      splitRowsEl.querySelectorAll(".pgto-split-row").forEach(bindSplitRow);
+
+      body.querySelector("#btnAssistAddSplit").addEventListener("click", function(){
+        var div = document.createElement("div");
+        div.innerHTML = pagamentoSplitRowHtml(null, splitRowCount++);
+        var row = div.firstElementChild;
+        splitRowsEl.appendChild(row);
+        bindSplitRow(row);
+        recalcSplitStatus();
+      });
+
+      body.querySelector("#fAssistDividirPagamento").addEventListener("change", function(e){
+        var dividir = e.target.checked;
+        body.querySelector("#assistPgtoSplit").classList.toggle("hidden", !dividir);
+        body.querySelector("#fAssistPagamento").classList.toggle("hidden", dividir);
+        recalcSplitStatus();
+      });
+
+      body.querySelector("#btnConfirmarRetirada").addEventListener("click", function(){
+        var desconto = descontoFinal();
+        var total = totalFinal();
+        if(total <= 0){ toast("Informe um valor válido"); return; }
+
+        var pagamentos;
+        if(body.querySelector("#fAssistDividirPagamento").checked){
+          pagamentos = [];
+          var somaAlocada = 0;
+          splitRowsEl.querySelectorAll(".pgto-split-row").forEach(function(row){
+            var forma = row.querySelector(".ps-forma").value;
+            var valorLinha = parseFloat(row.querySelector(".ps-valor").value) || 0;
+            if(valorLinha > 0){
+              pagamentos.push({ forma: forma, valor: valorLinha });
+              somaAlocada += valorLinha;
+            }
+          });
+          if(pagamentos.length === 0 || Math.abs(somaAlocada - total) >= 0.01){
+            toast("A soma das formas de pagamento precisa ser igual ao total (" + brl(total) + ")");
+            return;
+          }
+        } else {
+          pagamentos = [{ forma: body.querySelector("#fAssistPagamento").value, valor: total }];
+        }
+        var pagamentoLabel = pagamentos.length === 1 ? pagamentos[0].forma : "Dividido";
+
+        var itensVenda = (a.itens || []).map(function(i){
+          return { produtoId: i.produtoId, nome: i.nome, qtd: i.qtd, precoUnit: i.precoUnit, custoUnit: i.custoUnit || 0 };
+        });
+        if(a.maoDeObra > 0){
+          itensVenda.push({ produtoId: null, nome: "Mão de obra: " + assistenciaDescricao(a), qtd: 1, precoUnit: a.maoDeObra, custoUnit: 0 });
+        }
+
+        var novaVenda = {
+          id: uid(),
+          data: todayISO(),
+          criadoEm: new Date().toISOString(),
+          clienteId: a.clienteId,
+          vendedor: a.vendedor,
+          itens: itensVenda,
+          total: total,
+          desconto: desconto,
+          pagamento: pagamentoLabel,
+          pagamentos: pagamentos,
+          origemAssistenciaId: a.id,
+          assistencia: true
+        };
+        state.vendas.push(novaVenda);
+        a.status = "concluido";
+        a.desconto = desconto;
+        a.vendaId = novaVenda.id;
+        saveData();
+        closeModal();
+        renderAll();
+        toast("Retirada confirmada e lançada no caixa");
       });
     });
   }
@@ -2468,10 +2634,10 @@
     }
     if(retiradaId){ abrirConfirmarRetiradaAssistencia(retiradaId); return; }
     if(delId){
-      if(confirm("Excluir esta assistência? O estoque das peças já usadas não será restaurado automaticamente.")){
+      confirmarExclusao("Excluir esta assistência? O estoque das peças já usadas não será restaurado automaticamente.", function(){
         state.assistencias = state.assistencias.filter(function(a){ return a.id !== delId; });
         saveData(); renderAll(); toast("Assistência excluída");
-      }
+      });
       return;
     }
     var row = e.target.closest("[data-row-assist]");
@@ -2532,9 +2698,12 @@
     var totalMes = vendedMes.reduce(function(s,v){ return s + v.total; }, 0);
 
     document.getElementById("kpiTotal").textContent = kpiVisiveis ? brl(totalMes) : "R$ ••••";
-    document.getElementById("kpiDespesasTotal").textContent = kpiVisiveis ? brl(despesasTotalMes) : "R$ ••••";
+    // Despesas mostra sempre o valor real: ao contrário de vendas, não faz
+    // sentido escondê-la, e a máscara aqui só confundia (o valor não
+    // aparecia até clicar no olho ou entrar no Financeiro).
+    document.getElementById("kpiDespesasTotal").textContent = brl(despesasTotalMes);
 
-    [document.getElementById("eyeTotal"), document.getElementById("eyeDespesasTotal")].forEach(function(eyeBtn){
+    [document.getElementById("eyeTotal")].forEach(function(eyeBtn){
       if(eyeBtn){
         eyeBtn.innerHTML = kpiVisiveis ? EYE_OPEN_SVG : EYE_OFF_SVG;
         eyeBtn.setAttribute("aria-pressed", kpiVisiveis ? "true" : "false");
@@ -2780,16 +2949,14 @@
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
 
       body.querySelector("#btnNovaNatureza").addEventListener("click", function(){
-        var nome = prompt("Nome da nova natureza de despesa:");
-        if(!nome) return;
-        nome = nome.trim();
-        if(!nome) return;
-        if(state.naturezas.indexOf(nome) === -1){
-          state.naturezas.push(nome);
-          saveData();
-        }
-        var select = body.querySelector("#fNatureza");
-        select.innerHTML = naturezaOptionsHtml(nome);
+        pedirTexto("Nova natureza", "Nome da natureza de despesa", function(nome){
+          if(state.naturezas.indexOf(nome) === -1){
+            state.naturezas.push(nome);
+            saveData();
+          }
+          var select = body.querySelector("#fNatureza");
+          select.innerHTML = naturezaOptionsHtml(nome);
+        });
       });
 
       body.querySelector("#btnSave").addEventListener("click", function(){
@@ -2867,27 +3034,23 @@
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
 
       body.querySelector("#btnNovoClienteDevedorInline").addEventListener("click", function(){
-        var nome = prompt("Nome do novo cliente:");
-        if(!nome) return;
-        nome = nome.trim();
-        if(!nome) return;
-        var novoCliente = { id: uid(), nome: nome, cpf: "", telefone: "", email: "", obs: "" };
-        state.clientes.push(novoCliente);
-        saveData();
-        body.querySelector("#fDevedorCliente").innerHTML = clienteOptionsHtml(novoCliente.id);
-        toast("Cliente cadastrado");
+        pedirTexto("Novo cliente", "Nome do cliente", function(nome){
+          var novoCliente = { id: uid(), nome: nome, cpf: "", telefone: "", email: "", obs: "" };
+          state.clientes.push(novoCliente);
+          saveData();
+          body.querySelector("#fDevedorCliente").innerHTML = clienteOptionsHtml(novoCliente.id);
+          toast("Cliente cadastrado");
+        });
       });
 
       body.querySelector("#btnNovoVendedorDevedorInline").addEventListener("click", function(){
-        var nome = prompt("Nome do novo vendedor:");
-        if(!nome) return;
-        nome = nome.trim();
-        if(!nome) return;
-        if(state.vendedores.indexOf(nome) === -1){
-          state.vendedores.push(nome);
-          saveData();
-        }
-        body.querySelector("#fDevedorVendedor").innerHTML = vendedorOptionsHtml(nome);
+        pedirTexto("Novo vendedor", "Nome do vendedor", function(nome){
+          if(state.vendedores.indexOf(nome) === -1){
+            state.vendedores.push(nome);
+            saveData();
+          }
+          body.querySelector("#fDevedorVendedor").innerHTML = vendedorOptionsHtml(nome);
+        });
       });
 
       body.querySelector("#btnSave").addEventListener("click", function(){
@@ -2997,10 +3160,10 @@
       if(c){ c.status = "pago"; saveData(); renderAll(); toast("Conta marcada como paga"); }
     }
     if(delId){
-      if(confirm("Excluir esta despesa?")){
+      confirmarExclusao("Excluir esta despesa?", function(){
         state.contas = state.contas.filter(function(c){ return c.id !== delId; });
         saveData(); renderAll(); toast("Despesa excluída");
-      }
+      });
     }
   });
 
@@ -3014,10 +3177,10 @@
     }
     if(recebidoId) abrirMarcarDevedorPago(recebidoId);
     if(delId){
-      if(confirm("Remover este devedor? O estoque da mercadoria não será restaurado automaticamente.")){
+      confirmarExclusao("Remover este devedor? O estoque da mercadoria não será restaurado automaticamente.", function(){
         state.contas = state.contas.filter(function(c){ return c.id !== delId; });
         saveData(); renderAll(); toast("Devedor removido");
-      }
+      });
     }
   });
 
@@ -3066,9 +3229,7 @@
     });
   }
   bindEyeToggle("eyeVendas");
-  bindEyeToggle("eyeDespesas");
   bindEyeToggle("eyeTotal");
-  bindEyeToggle("eyeDespesasTotal");
 
   // Custo da mercadoria é informação de administrador: só aparece com a senha.
   // O mesmo cadeado vale para Produtos e para Estoque Celular.
@@ -3293,10 +3454,10 @@
     document.getElementById("kpiVendasQtd").textContent = vendasMes.length + (vendasMes.length === 1 ? " venda" : " vendas");
 
     var pagarPendente = state.contas.filter(function(c){ return c.tipo === "pagar" && c.status === "pendente"; });
-    document.getElementById("kpiPagar").textContent = kpiVisiveis ? brl(sum(pagarPendente)) : "R$ ••••";
+    document.getElementById("kpiPagar").textContent = brl(sum(pagarPendente));
     document.getElementById("kpiPagarQtd").textContent = pagarPendente.length + (pagarPendente.length === 1 ? " pendente" : " pendentes");
 
-    [document.getElementById("eyeVendas"), document.getElementById("eyeDespesas")].forEach(function(btn){
+    [document.getElementById("eyeVendas")].forEach(function(btn){
       btn.innerHTML = kpiVisiveis ? EYE_OPEN_SVG : EYE_OFF_SVG;
       btn.setAttribute("aria-pressed", kpiVisiveis ? "true" : "false");
       btn.setAttribute("aria-label", kpiVisiveis ? "Ocultar valor" : "Mostrar valor");
@@ -3426,12 +3587,12 @@
     var delNome = e.target.dataset.delVendedor;
     if(editNome) openVendedorModal(editNome);
     if(delNome){
-      if(confirm('Remover "' + delNome + '" da lista de vendedores? As vendas já lançadas continuam com o nome dele.')){
+      confirmarExclusao('Remover "' + delNome + '" da lista de vendedores? As vendas já lançadas continuam com o nome dele.', function(){
         state.vendedores = state.vendedores.filter(function(n){ return n !== delNome; });
         saveData();
         renderAll();
         toast("Vendedor removido");
-      }
+      });
     }
   });
 
@@ -3616,9 +3777,25 @@
 
   document.getElementById("btnExportar").addEventListener("click", exportarDados);
   document.getElementById("btnImportar").addEventListener("click", function(){
-    if(confirm("Importar vai substituir todos os dados atuais. Continuar?")){
-      document.getElementById("importFileInput").click();
-    }
+    abrirOverlay("Importar dados", (
+      '<p style="margin:0 0 1rem;color:var(--ink-dim);">Importar vai substituir todos os dados atuais. Confirme com a senha de administrador para continuar.</p>' +
+      '<div class="field"><label>Senha de administrador</label><input id="fSenhaImportar" type="password" inputmode="numeric" placeholder="Digite a senha"></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancelImportar">Cancelar</button><button class="btn btn-danger" id="btnConfirmarImportar">Importar</button></div>'
+    ), function(body, fechar){
+      var input = body.querySelector("#fSenhaImportar");
+      input.focus();
+      body.querySelector("#btnCancelImportar").addEventListener("click", fechar);
+      function tentar(){
+        if(input.value === state.adminCode){
+          fechar();
+          document.getElementById("importFileInput").click();
+        } else {
+          toast("Senha incorreta");
+        }
+      }
+      body.querySelector("#btnConfirmarImportar").addEventListener("click", tentar);
+      input.addEventListener("keydown", function(e){ if(e.key === "Enter") tentar(); });
+    });
   });
   document.getElementById("importFileInput").addEventListener("change", function(e){
     var file = e.target.files[0];

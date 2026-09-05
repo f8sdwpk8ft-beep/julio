@@ -373,6 +373,9 @@ tbody tr:hover{background:var(--surface-2, rgba(0,0,0,0.02));}
   display:flex;align-items:flex-start;justify-content:center;
   padding:4vh 1rem;overflow-y:auto;z-index:100;
 }
+/* Overlay independente (senha/confirmação/texto rápido): fica por cima de
+   qualquer modal já aberto, sem destruir o que já estava na tela. */
+.overlay-topo{z-index:200;}
 .modal{
   background:#fff;border-radius:16px;max-width:520px;width:100%;
   padding:1.5rem 1.6rem;box-shadow:0 30px 80px -20px rgba(0,0,0,0.35);
