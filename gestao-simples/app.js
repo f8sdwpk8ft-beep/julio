@@ -661,13 +661,57 @@
           '<button type="button" class="btn btn-ghost btn-sm" id="btnNovoVendedorCelInline" title="Adicionar vendedor">+</button>' +
         '</div></div>' +
       '</div>' +
-      '<div class="field"><label>Valor da venda</label><input id="fCelVendaValor" type="number" min="0" step="0.01" value="' + c.preco + '"></div>' +
-      '<div class="field" style="margin-top:0.5rem;"><label>Forma de pagamento</label></div>' +
+      '<div class="field"><label>Valor do aparelho</label><input id="fCelVendaValor" type="number" min="0" step="0.01" value="' + c.preco + '"></div>' +
+      '<div class="venda-items" style="margin-top:0.7rem;">' +
+        '<label>Produtos adicionais (opcional — capinha, película, carregador...)</label>' +
+        '<div id="celVendaExtraRows"></div>' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="btnCelAddItem" style="margin-top:0.4rem;">+ Adicionar produto</button>' +
+      '</div>' +
+      '<div class="venda-total-box" style="margin-top:1rem;">' +
+        '<div class="venda-total-linha venda-total-final"><span>Total</span><span id="celVendaTotalValor">' + brl(c.preco) + '</span></div>' +
+      '</div>' +
+      '<div class="field" style="margin-top:1rem;"><label>Forma de pagamento</label></div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem;">' +
         formas.map(function(f){ return '<button type="button" class="btn btn-ghost" data-forma-pagto="' + esc(f) + '">' + esc(f) + '</button>'; }).join("") +
       '</div>' +
       '<div class="modal-actions"><button class="btn btn-ghost" id="btnCancel">Cancelar</button></div>'
     ), function(body){
+      var extraRowsEl = body.querySelector("#celVendaExtraRows");
+      var extraRowCount = 0;
+
+      function recalcTotal(){
+        var valorAparelho = parseFloat(body.querySelector("#fCelVendaValor").value) || 0;
+        var extra = 0;
+        extraRowsEl.querySelectorAll(".venda-item-row").forEach(function(row){
+          var qtd = parseFloat(row.querySelector(".v-qtd").value) || 0;
+          var preco = parseFloat(row.querySelector(".v-preco").value) || 0;
+          extra += qtd * preco;
+        });
+        body.querySelector("#celVendaTotalValor").textContent = brl(valorAparelho + extra);
+      }
+
+      function bindExtraRow(row){
+        bindComboProduto(row, function(prod){
+          row.querySelector(".v-preco").value = prod.preco;
+          recalcTotal();
+        }, true);
+        row.querySelector(".v-qtd").addEventListener("input", recalcTotal);
+        row.querySelector(".v-preco").addEventListener("input", recalcTotal);
+        row.querySelector(".v-remove").addEventListener("click", function(){
+          row.remove();
+          recalcTotal();
+        });
+      }
+
+      body.querySelector("#fCelVendaValor").addEventListener("input", recalcTotal);
+      body.querySelector("#btnCelAddItem").addEventListener("click", function(){
+        var div = document.createElement("div");
+        div.innerHTML = vendaFormRow(null, extraRowCount++);
+        var row = div.firstElementChild;
+        extraRowsEl.appendChild(row);
+        bindExtraRow(row);
+      });
+
       body.querySelector("#btnCancel").addEventListener("click", closeModal);
       body.querySelector("#btnNovoClienteCelInline").addEventListener("click", function(){
         pedirTexto("Novo cliente", "Nome do cliente", function(nome){
@@ -690,23 +734,48 @@
       body.querySelectorAll("[data-forma-pagto]").forEach(function(btn){
         btn.addEventListener("click", function(){
           var forma = btn.dataset.formaPagto;
-          var valor = parseFloat(body.querySelector("#fCelVendaValor").value) || 0;
-          if(valor <= 0){ toast("Informe um valor válido"); return; }
+          var valorAparelho = parseFloat(body.querySelector("#fCelVendaValor").value) || 0;
+          if(valorAparelho <= 0){ toast("Informe um valor válido para o aparelho"); return; }
+
+          var itensExtras = [];
+          var valido = true;
+          extraRowsEl.querySelectorAll(".venda-item-row").forEach(function(row){
+            var produtoId = row.querySelector(".v-produto-id").value;
+            var nomeLivre = row.querySelector(".v-produto-busca").value.trim();
+            var qtd = parseInt(row.querySelector(".v-qtd").value, 10) || 0;
+            var preco = parseFloat(row.querySelector(".v-preco").value) || 0;
+            if(qtd <= 0 || (!produtoId && !nomeLivre)) return; // linha em branco: ignora
+            if(produtoId){
+              var prod = state.produtos.find(function(p){ return p.id === produtoId; });
+              if(!prod){ valido = false; return; }
+              if(qtd > prod.estoque){ valido = false; toast("Estoque insuficiente para " + prod.nome); return; }
+              itensExtras.push({ produtoId: produtoId, nome: prod.nome, qtd: qtd, precoUnit: preco, custoUnit: prod.custo || 0 });
+            } else if(preco > 0){
+              itensExtras.push({ produtoId: null, nome: nomeLivre, qtd: qtd, precoUnit: preco, custoUnit: 0 });
+            }
+          });
+          if(!valido) return;
+
+          var totalExtras = itensExtras.reduce(function(s,i){ return s + i.qtd * i.precoUnit; }, 0);
+          var total = valorAparelho + totalExtras;
           var clienteId = body.querySelector("#fCelVendaCliente").value || null;
           var vendedor = body.querySelector("#fCelVendaVendedor").value || null;
+          var itensVenda = [{ produtoId: null, nome: c.modelo + (c.imei ? " (IMEI " + c.imei + ")" : ""), qtd: 1, precoUnit: valorAparelho, custoUnit: c.custo || 0 }].concat(itensExtras);
+
           var novaVenda = {
             id: uid(),
             data: todayISO(),
             criadoEm: new Date().toISOString(),
             clienteId: clienteId,
             vendedor: vendedor,
-            itens: [{ produtoId: null, nome: c.modelo + (c.imei ? " (IMEI " + c.imei + ")" : ""), qtd: 1, precoUnit: valor, custoUnit: c.custo || 0 }],
-            total: valor,
+            itens: itensVenda,
+            total: total,
             desconto: 0,
             pagamento: forma,
-            pagamentos: [{ forma: forma, valor: valor }],
+            pagamentos: [{ forma: forma, valor: total }],
             origemCelularId: c.id
           };
+          baixarEstoqueItens(itensExtras);
           state.vendas.push(novaVenda);
           c.status = "vendido";
           c.vendaId = novaVenda.id;
