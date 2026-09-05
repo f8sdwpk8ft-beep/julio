@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gestão Simples</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">G</div>
+      <div class="brand-name">Gestão Simples<small>painel de gestão</small></div>
+    </div>
+    <ul class="nav" id="nav">
+      <li><a data-view="dashboard" class="active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        Início
+      </a></li>
+      <li><a data-view="vendas">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h2l2.4 12.2a2 2 0 0 0 2 1.8h8.2a2 2 0 0 0 2-1.6L21 8H6"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/></svg>
+        Vendas
+      </a></li>
+      <li><a data-view="assistencia">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        Assistência
+      </a></li>
+      <li><a data-view="produtos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
+        Produtos
+      </a></li>
+      <li><a data-view="estoquecelular">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>
+        Estoque Celular
+      </a></li>
+      <li><a data-view="quebra">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        Quebra
+      </a></li>
+      <li><a data-view="movimentacao">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h11"/><path d="m17 15 3 3 3-3"/></svg>
+        Movimentação
+      </a></li>
+      <li><a data-view="pecas">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.6 2H4a2 2 0 0 0-2 2v8.6a2 2 0 0 0 .6 1.4l9 9a2 2 0 0 0 2.8 0l7.6-7.6a2 2 0 0 0 0-2.8l-9-9A2 2 0 0 0 12.6 2Z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+        Peças
+      </a></li>
+      <li><a data-view="clientes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>
+        Clientes
+      </a></li>
+      <li><a data-view="financeiro">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="6" width="19" height="13" rx="2"/><path d="M2.5 10h19M6 15h4"/></svg>
+        Financeiro
+      </a></li>
+      <li><a data-view="admin">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5l-8-3Z"/></svg>
+        Admin
+      </a></li>
+    </ul>
+    <div class="sidebar-footer">Dados salvos neste navegador</div>
+    <div class="sidebar-data-actions">
+      <button class="btn btn-secondary btn-sm" id="btnExportar" type="button">Exportar dados</button>
+      <button class="btn btn-secondary btn-sm" id="btnImportar" type="button">Importar dados</button>
+      <input type="file" id="importFileInput" accept="application/json" style="display:none">
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <button class="menu-toggle" id="menuToggle" aria-label="Abrir menu">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+        <h1 id="pageTitle">Início</h1>
+      </div>
+      <div id="topbarActions"></div>
+    </div>
+
+    <div class="content">
+      <div id="alertasContainer" class="alertas-container"></div>
+
+      <!-- DASHBOARD -->
+      <section id="view-dashboard" class="view">
+        <div class="kpi-grid">
+          <div class="kpi-card kpi-card-clickable kpi-card-solid kpi-solid-ok" id="kpiCardVendas" title="Ver detalhes das vendas">
+            <div class="kpi-label">Vendas</div>
+            <div class="kpi-value-row">
+              <div class="kpi-value kpi-value-lg kpi-value-green" id="kpiVendasMes">R$ ••••</div>
+              <button class="kpi-eye" id="eyeVendas" type="button" aria-label="Mostrar valor" title="Mostrar valor" aria-pressed="false"></button>
+            </div>
+            <div class="kpi-sub" id="kpiVendasQtd">0 vendas</div>
+            <div class="kpi-footer">Ver detalhes<span class="kpi-footer-extra"> das vendas</span> <span aria-hidden="true">&rarr;</span></div>
+          </div>
+          <div class="kpi-card kpi-card-clickable kpi-card-solid kpi-solid-danger" id="kpiCardDespesas" title="Ver detalhes das despesas">
+            <div class="kpi-label">Despesas</div>
+            <div class="kpi-value-row">
+              <div class="kpi-value kpi-value-lg kpi-value-red" id="kpiPagar">R$ 0,00</div>
+            </div>
+            <div class="kpi-sub danger" id="kpiPagarQtd">0 pendentes</div>
+            <div class="kpi-footer">Ver detalhes<span class="kpi-footer-extra"> das despesas</span> <span aria-hidden="true">&rarr;</span></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Últimas vendas</h2>
+            <button class="btn btn-ghost btn-sm" id="btnHistoricoVendas">Ver todo o histórico</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Total</th></tr></thead>
+              <tbody id="tblUltimasVendas"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="chart-grid chart-grid-2">
+          <div class="panel chart-panel">
+            <div class="panel-head">
+              <h2>Vendas x Despesas</h2>
+              <div style="display:flex;align-items:center;gap:0.9rem;">
+                <div class="chart-legend">
+                  <span><i style="background:var(--ok)"></i>Vendas</span>
+                  <span><i style="background:var(--danger)"></i>Despesas</span>
+                </div>
+                <button class="kpi-eye" id="eyeGraficoVD" type="button" aria-label="Mostrar gráfico" title="Mostrar gráfico" aria-pressed="false"></button>
+              </div>
+            </div>
+            <div class="chart-holder" id="chartVendasDespesas"></div>
+          </div>
+          <div class="panel chart-panel">
+            <div class="panel-head">
+              <h2>Crescimento</h2>
+              <button class="kpi-eye" id="eyeGraficoCresc" type="button" aria-label="Mostrar gráfico" title="Mostrar gráfico" aria-pressed="false"></button>
+            </div>
+            <div class="chart-holder" id="chartCrescimento"></div>
+          </div>
+        </div>
+
+        <div id="estoqueBaixoContainer" class="alertas-container"></div>
+      </section>
+
+      <!-- VENDAS -->
+      <section id="view-vendas" class="view hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Vendas</h2>
+            <div style="display:flex;gap:0.6rem;">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="buscaVendas" placeholder="Buscar por cliente ou produto...">
+              </div>
+              <div class="date-range-wrap">
+                <button type="button" class="btn btn-ghost" id="btnPeriodoVendas">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+                  <span id="btnPeriodoVendasLabel">Período</span>
+                </button>
+                <div class="date-range-popover hidden" id="periodoPopover"></div>
+              </div>
+              <button class="btn btn-primary" id="btnNovaVenda">+ Nova venda</button>
+              <button class="btn btn-danger" id="btnDevolucao">Devoluções</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Pagamento</th><th>Total</th><th></th></tr></thead>
+              <tbody id="tblVendas"></tbody>
+            </table>
+          </div>
+          <div id="vendasPaginacao"></div>
+        </div>
+      </section>
+
+      <!-- ASSISTÊNCIA TÉCNICA -->
+      <section id="view-assistencia" class="view hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Assistência Técnica</h2>
+            <button class="btn btn-primary" id="btnNovaAssistencia">+ Nova assistência</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Cliente</th><th>Vendedor</th><th>Aparelho / Serviço</th><th>Valor</th><th>Entrada</th><th>Status</th><th></th></tr></thead>
+              <tbody id="tblAssistencias"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- PRODUTOS -->
+      <section id="view-produtos" class="view hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Produtos</h2>
+            <div style="display:flex;gap:0.6rem;">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="buscaProdutos" placeholder="Buscar produto...">
+              </div>
+              <button class="kpi-eye" id="eyeCusto" type="button" aria-label="Mostrar custo" title="Mostrar custo (admin)" aria-pressed="false"></button><button class="btn btn-primary" id="btnNovoProduto">+ Novo produto</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Custo</th><th>Estoque</th><th></th></tr></thead>
+              <tbody id="tblProdutos"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ESTOQUE CELULAR -->
+      <section id="view-estoquecelular" class="view hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Estoque Celular</h2>
+            <div style="display:flex;gap:0.6rem;">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="buscaCelulares" placeholder="Modelo ou IMEI...">
+              </div>
+              <button class="kpi-eye" id="eyeCustoCelular" type="button" aria-label="Mostrar custo" title="Mostrar custo (admin)" aria-pressed="false"></button>
+              <button class="btn btn-primary" id="btnNovoCelular">+ Novo aparelho</button>
+            </div>
+          </div>
+          <div class="vd-filtros" style="margin:0 0 1rem;">
+            <button type="button" class="btn btn-sm btn-primary" data-cel-filtro="todos">Todos</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-cel-filtro="disponivel">Disponível</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-cel-filtro="vendido">Vendido</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Modelo</th><th>Cor</th><th>IMEI</th><th>Preço</th><th>Custo</th><th>Status</th><th></th></tr></thead>
+              <tbody id="tblCelulares"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- QUEBRA (GARANTIA) -->
+      <section id="view-quebra" class="view hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Quebra (Garantia)</h2>
+            <button class="btn btn-primary" id="btnNovaQuebra">+ Registrar quebra</button>
+          </div>
+          <div class="vd-filtros" id="quebraFiltros" style="margin:0 0 1rem;">
+            <button type="button" class="btn btn-sm btn-ghost" data-qb-filtro="hoje">Hoje</button>
+            <button type="button" class="btn btn-sm btn-primary" data-qb-filtro="mes">Este mês</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-qb-filtro="ano">Este ano</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-qb-filtro="tudo">Tudo</button>
+          </div>
+          <div class="fechamento-detalhes" style="margin-bottom:1rem;" id="quebraResumo"></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Data</th><th>Tipo</th><th>Peça / Produto</th><th>Qtd</th><th>Motivo</th><th>Cliente</th><th></th></tr></thead>
+              <tbody id="tblQuebras"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- MOVIMENTAÇÃO DE ESTOQUE -->
+      <section id="view-movimentacao" class="view hidden">
+        <div class="kpi-grid">
+          <div class="kpi-card kpi-card-solid kpi-solid-ok">
+            <div class="kpi-label">Valor investido em estoque</div>
+            <div class="kpi-value kpi-value-lg kpi-value-green" id="kpiValorEstoque">R$ 0,00</div>
+            <div class="kpi-sub" id="kpiValorEstoqueSub">0 produtos · 0 aparelhos</div>
+          </div>
+          <div class="kpi-card kpi-card-solid kpi-solid-danger">
+            <div class="kpi-label">Produtos com estoque baixo</div>
+            <div class="kpi-value kpi-value-lg kpi-value-red" id="kpiQtdEstoqueBaixo">0</div>
+            <div class="kpi-sub danger" id="kpiQtdEstoqueBaixoSub">nenhum abaixo do mínimo</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Movimentação de Estoque</h2>
+            <div style="display:flex;gap:0.6rem;">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="buscaMovimentacao" placeholder="Buscar produto...">
+              </div>
+            </div>
+          </div>
+          <div class="vd-filtros" id="movimentacaoFiltros" style="margin:0 0 1rem;">
+            <button type="button" class="btn btn-sm btn-ghost" data-mv-filtro="hoje">Hoje</button>
+            <button type="button" class="btn btn-sm btn-primary" data-mv-filtro="mes">Este mês</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-mv-filtro="ano">Este ano</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-mv-filtro="tudo">Tudo</button>
+          </div>
+          <p style="margin:0 0 1rem;color:var(--ink-dim);font-size:0.85rem;">Todo lançamento que mexe no estoque (venda, devolução, quebra, troca de garantia, assistência, ajuste manual) fica registrado aqui, com data e motivo.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Data</th><th>Produto</th><th>Movimento</th><th>Origem</th><th>Estoque resultante</th></tr></thead>
+              <tbody id="tblMovimentacao"></tbody>
+            </table>
+          </div>
+          <div id="movimentacaoPaginacao"></div>
+        </div>
+      </section>
+
+      <!-- PEÇAS (tabela de preços de referência) -->
+      <section id="view-pecas" class="view hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Peças</h2>
+            <div style="display:flex;gap:0.6rem;">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="buscaPecas" placeholder="Buscar peça...">
+              </div>
+              <button class="btn btn-primary" id="btnNovaPeca">+ Nova peça</button>
+            </div>
+          </div>
+          <p style="margin:0 0 1rem;color:var(--ink-dim);font-size:0.85rem;">Tabela de preços de referência (sem controle de estoque) — aparece como sugestão ao registrar uma peça avulsa na Assistência Técnica.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nome</th><th>Valor</th><th></th></tr></thead>
+              <tbody id="tblPecas"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- CLIENTES -->
+      <section id="view-clientes" class="view hidden">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Clientes</h2>
+            <div style="display:flex;gap:0.6rem;">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="buscaClientes" placeholder="Buscar cliente...">
+              </div>
+              <button class="btn btn-primary" id="btnNovoCliente">+ Novo cliente</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nome</th><th>CPF / CNPJ</th><th>Telefone</th><th>E-mail</th><th>Observações</th><th></th></tr></thead>
+              <tbody id="tblClientes"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- FINANCEIRO -->
+      <section id="view-financeiro" class="view hidden">
+        <div class="kpi-grid">
+          <div class="kpi-card kpi-card-clickable kpi-card-solid kpi-solid-ok" id="kpiCardTotal" title="Ver detalhes das vendas">
+            <div class="kpi-label">Total</div>
+            <div class="kpi-value-row">
+              <div class="kpi-value kpi-value-lg kpi-value-green" id="kpiTotal">R$ ••••</div>
+              <button class="kpi-eye" id="eyeTotal" type="button" aria-label="Mostrar valor" title="Mostrar valor" aria-pressed="false"></button>
+            </div>
+            <div class="kpi-sub" id="kpiTotalSub">vendas do mês</div>
+            <div class="kpi-footer">Ver detalhes<span class="kpi-footer-extra"> das vendas</span> <span aria-hidden="true">&rarr;</span></div>
+          </div>
+          <div class="kpi-card kpi-card-clickable kpi-card-solid kpi-solid-danger" id="kpiCardDespesasTotal" title="Ver detalhes das despesas">
+            <div class="kpi-label">Despesas</div>
+            <div class="kpi-value-row">
+              <div class="kpi-value kpi-value-lg kpi-value-red" id="kpiDespesasTotal">R$ 0,00</div>
+            </div>
+            <div class="kpi-sub" id="kpiDespesasSub">despesas pendentes</div>
+            <div class="kpi-footer">Ver detalhes<span class="kpi-footer-extra"> das despesas</span> <span aria-hidden="true">&rarr;</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Despesas</h2>
+            <button class="btn btn-primary" id="btnNovaConta">+ Adicionar despesa</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Descrição</th><th>Natureza</th><th>Pagamento</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+              <tbody id="tblContas"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Devedores</h2>
+            <button class="btn btn-primary" id="btnNovoDevedor">+ Adicionar devedor</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Cliente</th><th>Mercadoria</th><th>Data prevista</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+              <tbody id="tblDevedores"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel-duo">
+          <div class="panel">
+            <div class="panel-head"><h2>Comissões</h2></div>
+            <div id="comissoesConteudo"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h2>Vendas de hoje</h2></div>
+            <div class="kpi-value-row vd-clicavel" style="margin-bottom:0.9rem; cursor: pointer;" id="finVendasHojeRow" title="Ver detalhes das vendas de hoje">
+              <div class="kpi-value kpi-value-lg kpi-value-green" id="finVendasHojeTotal">R$ 0,00</div>
+            </div>
+            <div class="vd-pagamentos" id="finVendasHojePagamentos"></div>
+          </div>
+        </div>
+
+        <div class="panel-duo">
+          <div class="panel">
+            <div class="panel-head"><h2>Fechamento do Dia</h2></div>
+            <div id="fechamentoDiaConteudo"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><h2>Fechamento do Mês</h2></div>
+            <div id="fechamentoMesConteudo"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ADMIN -->
+      <section id="view-admin" class="view hidden">
+        <div class="panel-duo">
+          <div class="panel">
+            <div class="panel-head"><h2>Configurações da loja</h2></div>
+            <div class="field" style="max-width:340px;">
+              <label>Nome da loja (aparece no recibo impresso)</label>
+              <input id="fNomeLoja" placeholder="Ex: Loja da Maria">
+            </div>
+            <div class="field-row" style="max-width:500px;">
+              <div class="field">
+                <label>Senha de administrador</label>
+                <input id="fSenhaAdminConfig" inputmode="numeric" placeholder="Ex: 1518">
+              </div>
+              <div class="field">
+                <label>Senha de desconto do vendedor</label>
+                <input id="fSenhaDescontoConfig" inputmode="numeric" placeholder="Ex: 3268">
+              </div>
+            </div>
+            <div class="cell-sub" style="margin-top:-0.6rem;">Só quem já entrou no Admin com a senha atual pode alterar essas senhas.</div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Vendedores</h2>
+              <button class="btn btn-primary" id="btnNovoVendedor">+ Novo vendedor</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Nome</th><th></th></tr></thead>
+                <tbody id="tblVendedores"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Fechamento Geral</h2></div>
+          <div class="vd-filtros" id="fechamentoGeralFiltros" style="align-items:center;">
+            <button type="button" class="btn btn-sm btn-ghost" data-fg-filtro="hoje">Hoje</button>
+            <button type="button" class="btn btn-sm btn-primary" data-fg-filtro="mes">Este mês</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-fg-filtro="ano">Este ano</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-fg-filtro="tudo">Tudo</button>
+            <div class="date-range-wrap">
+              <button type="button" class="btn btn-ghost btn-sm" id="btnPeriodoGeral">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+                Período personalizado
+              </button>
+              <div class="date-range-popover hidden" id="periodoGeralPopover"></div>
+            </div>
+            <span id="fechamentoGeralPeriodoLabel" style="font-size:0.8rem;color:var(--ink-dim);"></span>
+          </div>
+          <div id="fechamentoGeralConteudo"></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+<div id="reciboImprimir" class="recibo-print"></div>
+<div id="chartTooltip" class="chart-tooltip hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
